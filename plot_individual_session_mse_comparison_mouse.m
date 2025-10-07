@@ -11,7 +11,7 @@ fprintf('Using built-in MATLAB errorbar function with SEM...\n');
 all_data = struct();
 stages = ["Wake", "NREM", "REM"];
 colors_conditions = {[0, 0.4470, 0.7410], [0.8500, 0.3250, 0.0980]};  % Blue and Red RGB
-channels = [2];
+channels = [1, 2];
 
 % Colors for individual mice (lighter versions of main colors)
 individual_colors = {[0.5, 0.7235, 0.8705], [0.925, 0.6625, 0.549]};  % Light blue and light red
