@@ -10,4 +10,4 @@
 module load matlab/2023b.2
 mkdir -p logs
 
-matlab -nosplash -nodesktop -r "addpath('/home/vcarriqu/scratch/MSE'); base_path = '/home/vcarriqu/scratch/MSE/dataset'; conditions = {'TBI', 'Sham'}; plot_individual_session_mse_comparison_mouse(base_path, conditions); exit;"
+matlab -nosplash -nodesktop -r "addpath('/home/vcarriqu/scratch/MSE'); base_path = '/home/vcarriqu/scratch/MSE/dataset/MSE_NLF_6m_chronic'; conditions = {'TBI', 'Sham'}; plot_individual_session_mse_comparison_mouse(base_path, conditions); exit;"
