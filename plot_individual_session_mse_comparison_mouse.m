@@ -1,4 +1,4 @@
-function plot_individual_session_mse_comparison_mouse(base_path, session, conditions)
+function plot_individual_session_mse_comparison_mouse(base_path, sessions, conditions)
 % Plot MSE curves for individual session comparing conditions across sleep stages for both channels
 % Shows individual mouse curves plus mean with error bars
 % Conditions: TBI vs Sham
