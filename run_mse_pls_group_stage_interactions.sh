@@ -10,4 +10,4 @@
 module load matlab/2023b.2
 mkdir -p logs
 
-matlab -nosplash -nodesktop -r "addpath('/home/eshams/scratch/test'); base_path = '/home/eshams/scratch/test/Dataset/NLF/NLF_Older_Cohort'; mse_pls_group_session_interactions(base_path); exit;"
+matlab -nosplash -nodesktop -r "addpath('/home/eshams/scratch/test'); base_path = '/home/eshams/scratch/test/Dataset/NLF/NLF_Older_Cohort'; mse_pls_group_stage_interactions(base_path); exit;"
