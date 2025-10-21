@@ -11,7 +11,7 @@ stages = ["Wake", "NREM", "REM"];
 channels = [1, 2];
 
 % Expected sample sizes
-expected_n = struct('Sham', 10, 'TBI', 12);
+expected_n = struct('Sham', 10, 'TBI', 10);
 
 %% Define RGB colormap
 rgb = [ ...
