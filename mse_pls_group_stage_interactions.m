@@ -273,4 +273,99 @@ for ch = 1:length(channels)
                     if pvals(pv) < 0.001
                         fprintf('LV%d<0.001 ', pv);
                     elseif pvals(pv) < 0.05
-                        fprintf('LV%d=%.4f* ', pv, pvals(p
+                        fprintf('LV%d=%.4f* ', pv, pvals(pv));
+                    else
+                        fprintf('LV%d=%.4f ', pv, pvals(pv));
+                    end
+                end
+                fprintf('\n');
+                
+                % Plot LV1 only
+                if length(pvals) >= 1
+                    LV = 1;
+                    p = pvals(LV);
+                    headline = sprintf('Group×Stage: Ch%d, LV%d p=%.4f', ...
+                        channel, LV, p);
+                    
+                    figure('Position', [100 100 1000 500]);
+                    
+                    % Bar plot
+                    subplot(1,2,1)
+                    z = pls_result.boot_result.orig_usc;
+                    bar_handle = bar(z(:,LV));
+                    hold on
+                    
+                    % Color bars
+                    bar_colors = zeros(length(group_labels_pls), 3);
+                    for i = 1:length(group_labels_pls)
+                        if contains(group_labels_pls{i}, 'Sham')
+                            bar_colors(i, :) = [0.3 0.6 0.9];
+                        else
+                            bar_colors(i, :) = [0.9 0.4 0.3];
+                        end
+                    end
+                    bar_handle.CData = bar_colors;
+                    
+                    % Error bars
+                    yneg = pls_result.boot_result.llusc(:,LV);
+                    ypos = pls_result.boot_result.ulusc(:,LV);
+                    errorbar(1:length(z), z(:,LV), yneg - z(:,LV), ypos - z(:,LV), '.', 'Color', 'black')
+                    
+                    xticks(1:length(group_labels_pls))
+                    xticklabels(group_labels_pls)
+                    xtickangle(45)
+                    grid on
+                    title('Stage×Group Contrast Scores')
+                    ylabel('Contrast Scores')
+                    xlabel('Condition by Sleep Stage')
+                    
+                    % Separator line between Sham and TBI groups
+                    num_sham = sum(contains(group_labels_pls, 'Sham'));
+                    xline(num_sham + 0.5, '--k', 'LineWidth', 2, 'Alpha', 0.7);
+                    
+                    % Heatmap
+                    subplot(1,2,2)
+                    x = pls_result.boot_result.compare_u(:,LV);
+                    x(abs(x)<2.3) = 0;
+                    data_struct = all_data.(conditions{1}).(field_name);
+                    scales = data_struct.scales;
+                    plotdata = reshape(x, length(scales), []);
+                    
+                    imagesc(plotdata)
+                    colormap(rgb)
+                    clim([-7 7])
+                    colorbar
+                    yticks(1:5:length(scales))
+                    yticklabels(1:5:length(scales))
+                    xticks([])
+                    title(sprintf('Salience LV%d', LV))
+                    ylabel('Temporal Scale')
+                    
+                    sgtitle(headline, 'FontSize', 16, 'Interpreter', 'none')
+                    set(gcf, 'Color', 'w')
+                    
+                    % Save figure
+                    fig_filename = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d_LV%d.png', ...
+                        channel, LV));
+                    saveas(gcf, fig_filename)
+                    
+                    fig_filename_highres = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d_LV%d.fig', ...
+                        channel, LV));
+                    saveas(gcf, fig_filename_highres)
+                    
+                    fprintf('  Saved: %s\n', fig_filename);
+                end
+                
+                % Save results
+                save_filename = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d.mat', ...
+                    channel));
+                save(save_filename, 'pls_result', 'pvals', 'group_sizes', 'conditions', ...
+                    'stages', 'channel', 'interaction_data', ...
+                    'group_labels_pls', 'unique_stage_nums');
+            end
+        end
+    end
+end
+
+fprintf('\nAnalysis complete!\n');
+end
