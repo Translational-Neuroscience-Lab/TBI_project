@@ -1,4 +1,4 @@
-function plot_individual_session_mse_comparison_mouse(base_path, conditions)
+function plot_mse_comparison_average(base_path, conditions)
 % Plot MSE curves comparing conditions across sleep stages for both channels
 % Shows mean with shaded error bars (SEM)
 % Conditions: TBI vs Sham
