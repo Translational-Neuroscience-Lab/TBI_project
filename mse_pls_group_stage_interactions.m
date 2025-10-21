@@ -1,6 +1,6 @@
 function mse_pls_group_stage_interactions(base_path)
-% Group-by-stage interaction analysis for MSE data
-% Tests whether Sham vs TBI differences change across sleep stages
+% Group comparison analysis for MSE data by sleep stage
+% Tests Sham vs TBI differences separately for each sleep stage
 
 % Add PLS toolbox to path
 addpath(genpath('PLS'));
@@ -124,12 +124,12 @@ for ch = 1:length(channels)
 end
 
 %% Create results directory
-results_dir = fullfile(base_path, 'PLS_GroupStage_Interactions');
+results_dir = fullfile(base_path, 'PLS_ByStage');
 if ~exist(results_dir, 'dir')
     mkdir(results_dir);
 end
 
-%% Group-by-Stage Interaction Analysis
+%% PLS Analysis: Separate for each sleep stage
 fprintf('\nRunning PLS Analysis...\n');
 
 for ch = 1:length(channels)
@@ -138,11 +138,13 @@ for ch = 1:length(channels)
     
     fprintf('Processing Channel %d...\n', channel);
     
-    % Check data completeness for all stages
-    combination_complete = true;
-    for st_check = 1:length(stages)
-        stage_check = stages(st_check);
+    % Loop through each sleep stage separately
+    for st = 1:length(stages)
+        stage = stages(st);
+        fprintf('  Analyzing %s...\n', stage);
         
+        % Check data completeness for this stage
+        stage_complete = true;
         for c_check = 1:length(conditions)
             condition_check = conditions{c_check};
             
@@ -152,36 +154,29 @@ for ch = 1:length(channels)
                 
                 data_struct_check = all_data.(condition_check).(field_name);
                 if ~isempty(data_struct_check.mouse_averages)
-                    stage_idx_check = data_struct_check.stages == stage_check;
+                    stage_idx_check = data_struct_check.stages == stage;
                     actual_count = sum(stage_idx_check);
                 end
             end
             
             expected_count = expected_n.(condition_check);
             if actual_count ~= expected_count
-                combination_complete = false;
-                fprintf('  Warning: %s %s has %d subjects (expected %d)\n', ...
-                    condition_check, stage_check, actual_count, expected_count);
+                stage_complete = false;
+                fprintf('    Warning: %s %s has %d subjects (expected %d)\n', ...
+                    condition_check, stage, actual_count, expected_count);
                 break;
             end
         end
-        if ~combination_complete
-            break;
+        
+        if ~stage_complete
+            fprintf('    Skipping %s - incomplete data\n', stage);
+            continue;
         end
-    end
-    
-    if ~combination_complete
-        fprintf('  Skipping - incomplete data\n');
-        continue;
-    end
-    
-    % Collect data for PLS analysis
-    interaction_data = [];
-    group_labels = [];
-    stage_labels = [];
-    
-    for st = 1:length(stages)
-        stage = stages(st);
+        
+        % Collect data for this stage only
+        stage_data = [];
+        group_labels_pls = {};
+        group_sizes = [];
         
         for c = 1:length(conditions)
             condition = conditions{c};
@@ -197,78 +192,32 @@ for ch = 1:length(channels)
                     if sum(stage_idx) > 0
                         condition_data = data_struct.mouse_averages(stage_idx, :);
                         
-                        interaction_data = [interaction_data; condition_data];
-                        group_code = strcmp(condition, 'TBI');
-                        group_labels = [group_labels; repmat(group_code, size(condition_data, 1), 1)];
-                        stage_labels = [stage_labels; repmat(st, size(condition_data, 1), 1)];
+                        stage_data = [stage_data; condition_data];
+                        group_sizes(end+1) = size(condition_data, 1);
+                        group_labels_pls{end+1} = condition;
                     end
                 end
             end
         end
-    end
-    
-    % Run PLS analysis
-    if ~isempty(interaction_data)
-        % Clean data
-        interaction_data(isnan(interaction_data) | isinf(interaction_data)) = 0;
         
-        % Organize data for PLS
-        pls_data = [];
-        group_sizes = [];
-        group_labels_pls = {};
-        
-        unique_stage_nums = unique(stage_labels);
-        unique_stage_nums = sort(unique_stage_nums);
-        
-        % All Sham first, then all TBI
-        for st = 1:length(unique_stage_nums)
-            stage_num = unique_stage_nums(st);
-            stage_name = stages(stage_num);
+        % Run PLS analysis for this stage
+        if ~isempty(stage_data) && length(group_sizes) == 2 && min(group_sizes) >= 3
+            % Clean data
+            stage_data(isnan(stage_data) | isinf(stage_data)) = 0;
             
-            % Sham
-            stage_idx = stage_labels == stage_num;
-            group_idx = group_labels == 0; % Sham = 0
-            combo_idx = stage_idx & group_idx;
-            
-            if sum(combo_idx) >= 3
-                combo_data = interaction_data(combo_idx, :);
-                pls_data = [pls_data; combo_data];
-                group_sizes(end+1) = size(combo_data, 1);
-                group_labels_pls{end+1} = sprintf('Sham %s', stage_name);
-            end
-        end
-        
-        for st = 1:length(unique_stage_nums)
-            stage_num = unique_stage_nums(st);
-            stage_name = stages(stage_num);
-            
-            % TBI
-            stage_idx = stage_labels == stage_num;
-            group_idx = group_labels == 1; % TBI = 1
-            combo_idx = stage_idx & group_idx;
-            
-            if sum(combo_idx) >= 3
-                combo_data = interaction_data(combo_idx, :);
-                pls_data = [pls_data; combo_data];
-                group_sizes(end+1) = size(combo_data, 1);
-                group_labels_pls{end+1} = sprintf('TBI %s', stage_name);
-            end
-        end
-        
-        % PLS options
-        if length(group_sizes) >= 2 && min(group_sizes) >= 3
+            % PLS options
             clear option
             option.method = 1;     % Mean-centred PLS
             option.num_perm = 500;
             option.num_boot = 1000;
             
             ncond = length(group_sizes);
-            pls_result = pls_analysis({pls_data}, {group_sizes}, ncond, option);
+            pls_result = pls_analysis({stage_data}, {group_sizes}, ncond, option);
             
             if isfield(pls_result, 'perm_result') && isfield(pls_result.perm_result, 'sprob')
                 pvals = pls_result.perm_result.sprob;
                 
-                fprintf('  P-values: ');
+                fprintf('    P-values: ');
                 for pv = 1:length(pvals)
                     if pvals(pv) < 0.001
                         fprintf('LV%d<0.001 ', pv);
@@ -284,8 +233,8 @@ for ch = 1:length(channels)
                 if length(pvals) >= 1
                     LV = 1;
                     p = pvals(LV);
-                    headline = sprintf('Group×Stage: Ch%d, LV%d p=%.4f', ...
-                        channel, LV, p);
+                    headline = sprintf('%s: Sham vs TBI, Ch%d, LV%d p=%.4f', ...
+                        stage, channel, LV, p);
                     
                     figure('Position', [100 100 1000 500]);
                     
@@ -296,14 +245,7 @@ for ch = 1:length(channels)
                     hold on
                     
                     % Color bars
-                    bar_colors = zeros(length(group_labels_pls), 3);
-                    for i = 1:length(group_labels_pls)
-                        if contains(group_labels_pls{i}, 'Sham')
-                            bar_colors(i, :) = [0.3 0.6 0.9];
-                        else
-                            bar_colors(i, :) = [0.9 0.4 0.3];
-                        end
-                    end
+                    bar_colors = [0.3 0.6 0.9; 0.9 0.4 0.3]; % Sham blue, TBI red
                     bar_handle.CData = bar_colors;
                     
                     % Error bars
@@ -315,13 +257,9 @@ for ch = 1:length(channels)
                     xticklabels(group_labels_pls)
                     xtickangle(45)
                     grid on
-                    title('Stage×Group Contrast Scores')
+                    title('Group Contrast Scores')
                     ylabel('Contrast Scores')
-                    xlabel('Condition by Sleep Stage')
-                    
-                    % Separator line between Sham and TBI groups
-                    num_sham = sum(contains(group_labels_pls, 'Sham'));
-                    xline(num_sham + 0.5, '--k', 'LineWidth', 2, 'Alpha', 0.7);
+                    xlabel('Condition')
                     
                     % Heatmap
                     subplot(1,2,2)
@@ -345,23 +283,22 @@ for ch = 1:length(channels)
                     set(gcf, 'Color', 'w')
                     
                     % Save figure
-                    fig_filename = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d_LV%d.png', ...
-                        channel, LV));
+                    fig_filename = fullfile(results_dir, sprintf('%s_PLS_ch%d_LV%d.png', ...
+                        stage, channel, LV));
                     saveas(gcf, fig_filename)
                     
-                    fig_filename_highres = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d_LV%d.fig', ...
-                        channel, LV));
+                    fig_filename_highres = fullfile(results_dir, sprintf('%s_PLS_ch%d_LV%d.fig', ...
+                        stage, channel, LV));
                     saveas(gcf, fig_filename_highres)
                     
-                    fprintf('  Saved: %s\n', fig_filename);
+                    fprintf('    Saved: %s\n', fig_filename);
                 end
                 
                 % Save results
-                save_filename = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d.mat', ...
-                    channel));
+                save_filename = fullfile(results_dir, sprintf('%s_PLS_ch%d.mat', ...
+                    stage, channel));
                 save(save_filename, 'pls_result', 'pvals', 'group_sizes', 'conditions', ...
-                    'stages', 'channel', 'interaction_data', ...
-                    'group_labels_pls', 'unique_stage_nums');
+                    'stage', 'channel', 'stage_data', 'group_labels_pls');
             end
         end
     end
