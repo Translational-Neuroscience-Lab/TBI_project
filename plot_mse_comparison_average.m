@@ -33,10 +33,8 @@ for ch = 1:length(channels)
             if ~isempty(dataset_files)
                 % Initialize arrays for this condition/channel
                 condition_data = struct();
-                condition_data.mse_data = [];
-                condition_data.stages = [];
+                condition_data.subject_means = [];  % Store subject-level means
                 condition_data.scales = [];
-                condition_data.subject_ids = [];
 
                 % Load and combine all subjects for this condition
                 for f = 1:length(dataset_files)
@@ -67,14 +65,18 @@ for ch = 1:length(channels)
                                 end
                             end
                             
-                            % Concatenate data for overall statistics
-                            condition_data.mse_data = [condition_data.mse_data; mse_matrix];
-                            condition_data.stages = [condition_data.stages; valid_stages];
-                            condition_data.scales = dataset.mse_scales;
+                            % Store subject data for later stage-specific averaging
+                            subject_data = struct();
+                            subject_data.mse_data = mse_matrix;
+                            subject_data.stages = valid_stages;
                             
-                            % Add subject IDs for each epoch
-                            subject_ids = repmat(f, n_valid, 1);
-                            condition_data.subject_ids = [condition_data.subject_ids; subject_ids];
+                            if isempty(condition_data.subject_means)
+                                condition_data.subject_means = {subject_data};
+                            else
+                                condition_data.subject_means{end+1} = subject_data;
+                            end
+                            
+                            condition_data.scales = dataset.mse_scales;
                         end
 
                     catch ME
@@ -85,8 +87,8 @@ for ch = 1:length(channels)
                 % Store combined data with channel info
                 field_name = sprintf('ch%d', channel);
                 all_data.(condition).(field_name) = condition_data;
-                fprintf('  %s Channel %d: %d epochs from %d subjects loaded\n', condition, channel, ...
-                       size(condition_data.mse_data, 1), length(dataset_files));
+                fprintf('  %s Channel %d: %d subjects loaded\n', condition, channel, ...
+                       length(condition_data.subject_means));
                 
             else
                 fprintf('  Warning: No dataset files found in %s\n', condition_path);
@@ -129,20 +131,36 @@ for ch = 1:length(channels)
             if isfield(all_data, condition) && isfield(all_data.(condition), field_name)
 
                 data_struct = all_data.(condition).(field_name);
-                if ~isempty(data_struct.mse_data)
+                if ~isempty(data_struct.subject_means)
                     
-                    % Filter by stage only
-                    stage_idx = data_struct.stages == stage;
+                    % Calculate subject-level means for this stage
+                    subject_stage_means = [];
+                    n_subjects = 0;
+                    
+                    for subj = 1:length(data_struct.subject_means)
+                        subj_data = data_struct.subject_means{subj};
+                        
+                        % Filter by stage
+                        stage_idx = subj_data.stages == stage;
+                        
+                        if sum(stage_idx) > 0
+                            % Calculate mean across epochs for this subject
+                            subj_stage_mse = subj_data.mse_data(stage_idx, :);
+                            subj_mean = mean(subj_stage_mse, 1);
+                            subject_stage_means = [subject_stage_means; subj_mean];
+                            n_subjects = n_subjects + 1;
+                        end
+                    end
 
-                    if sum(stage_idx) > 0
-                        stage_mse = data_struct.mse_data(stage_idx, :);
-                        mean_mse = mean(stage_mse, 1);
-                        std_mse = std(stage_mse, 0, 1);
-                        sem_mse = std_mse / sqrt(size(stage_mse, 1));
+                    if n_subjects > 0
+                        % Calculate grand mean and SEM across subjects
+                        mean_mse = mean(subject_stage_means, 1);
+                        std_mse = std(subject_stage_means, 0, 1);
+                        sem_mse = std_mse / sqrt(n_subjects);
 
                         % Debug output
-                        fprintf('    Data points: %d, SEM range: %.6f to %.6f\n', ...
-                               size(stage_mse, 1), min(sem_mse), max(sem_mse));
+                        fprintf('    Number of subjects: %d, SEM range: %.6f to %.6f\n', ...
+                               n_subjects, min(sem_mse), max(sem_mse));
 
                         % Get color
                         color_rgb = colors_conditions{c};
