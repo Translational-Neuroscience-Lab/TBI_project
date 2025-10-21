@@ -6,13 +6,12 @@ function mse_pls_group_stage_interactions(base_path)
 addpath(genpath('PLS'));
 
 % Parameters
-sessions = {'Session1'}; % Single session
 conditions = {'Sham', 'TBI'};
 stages = ["Wake", "NREM", "REM"];
 channels = [1, 2];
 
 % Expected sample sizes
-expected_n = struct('Sham', 6, 'TBI', 6);
+expected_n = struct('Sham', 10, 'TBI', 12);
 
 %% Define RGB colormap
 rgb = [ ...
@@ -46,84 +45,79 @@ for ch = 1:length(channels)
     channel = channels(ch);
     fprintf('Processing Channel %d...\n', channel);
 
-    for s = 1:length(sessions)
-        session = sessions{s};
-        fprintf('  Loading session %s...\n', session);
+    for c = 1:length(conditions)
+        condition = conditions{c};
+        condition_path = fullfile(base_path, condition, 'Results');
 
-        for c = 1:length(conditions)
-            condition = conditions{c};
-            condition_path = fullfile(base_path, session, condition, 'Results');
+        if exist(condition_path, 'dir')
+            dataset_files = dir(fullfile(condition_path, '*_dataset.mat'));
 
-            if exist(condition_path, 'dir')
-                dataset_files = dir(fullfile(condition_path, '*_dataset.mat'));
+            if ~isempty(dataset_files)
+                mouse_data = struct();
+                mouse_data.mouse_averages = [];
+                mouse_data.mouse_ids = {};
+                mouse_data.stages = [];
+                mouse_data.scales = [];
+                mouse_data.n_epochs_per_mouse = [];
 
-                if ~isempty(dataset_files)
-                    mouse_data = struct();
-                    mouse_data.mouse_averages = [];
-                    mouse_data.mouse_ids = {};
-                    mouse_data.stages = [];
-                    mouse_data.scales = [];
-                    mouse_data.n_epochs_per_mouse = [];
+                for f = 1:length(dataset_files)
+                    file_path = fullfile(condition_path, dataset_files(f).name);
+                    [~, filename, ~] = fileparts(dataset_files(f).name);                 
+                    filename_parts = strsplit(filename, '_');
+                    mouse_id = filename_parts{1};
 
-                    for f = 1:length(dataset_files)
-                        file_path = fullfile(condition_path, dataset_files(f).name);
-                        [~, filename, ~] = fileparts(dataset_files(f).name);                 
-                        filename_parts = strsplit(filename, '_');
-                        mouse_id = filename_parts{1};
+                    data = load(file_path);
+                    dataset = data.dataset;
 
-                        data = load(file_path);
-                        dataset = data.dataset;
+                    % Get valid epochs based on channel
+                    if channel == 1
+                        valid_idx = ~cellfun(@isempty, dataset.MSE_EEG1);
+                        valid_mse = dataset.MSE_EEG1(valid_idx);
+                    else
+                        valid_idx = ~cellfun(@isempty, dataset.MSE_EEG2);
+                        valid_mse = dataset.MSE_EEG2(valid_idx);
+                    end
 
-                        % Get valid epochs based on channel
-                        if channel == 1
-                            valid_idx = ~cellfun(@isempty, dataset.MSE_EEG1);
-                            valid_mse = dataset.MSE_EEG1(valid_idx);
-                        else
-                            valid_idx = ~cellfun(@isempty, dataset.MSE_EEG2);
-                            valid_mse = dataset.MSE_EEG2(valid_idx);
+                    valid_stages = dataset.Sleep_Stage(valid_idx);
+
+                    % Convert MSE cell array to matrix
+                    if ~isempty(valid_mse)
+                        n_valid = length(valid_mse);
+                        mse_matrix = zeros(n_valid, length(dataset.mse_scales));
+                        for i = 1:n_valid
+                            if ~isempty(valid_mse{i})
+                                mse_matrix(i, :) = valid_mse{i};
+                            end
                         end
 
-                        valid_stages = dataset.Sleep_Stage(valid_idx);
+                        % Average across epochs for each stage
+                        unique_stages = unique(valid_stages);
 
-                        % Convert MSE cell array to matrix
-                        if ~isempty(valid_mse)
-                            n_valid = length(valid_mse);
-                            mse_matrix = zeros(n_valid, length(dataset.mse_scales));
-                            for i = 1:n_valid
-                                if ~isempty(valid_mse{i})
-                                    mse_matrix(i, :) = valid_mse{i};
-                                end
-                            end
+                        for stage_idx = 1:length(unique_stages)
+                            stage = unique_stages(stage_idx);
 
-                            % Average across epochs for each stage
-                            unique_stages = unique(valid_stages);
+                            combo_idx = (valid_stages == stage);
 
-                            for stage_idx = 1:length(unique_stages)
-                                stage = unique_stages(stage_idx);
+                            if sum(combo_idx) >= 3 % Minimum 3 epochs
+                                mouse_avg = mean(mse_matrix(combo_idx, :), 1);
+                                n_epochs = sum(combo_idx);
 
-                                combo_idx = (valid_stages == stage);
-
-                                if sum(combo_idx) >= 3 % Minimum 3 epochs
-                                    mouse_avg = mean(mse_matrix(combo_idx, :), 1);
-                                    n_epochs = sum(combo_idx);
-
-                                    % Store mouse-level data
-                                    mouse_data.mouse_averages = [mouse_data.mouse_averages; mouse_avg];
-                                    mouse_data.mouse_ids{end+1} = sprintf('%s_%s', mouse_id, stage);
-                                    mouse_data.stages = [mouse_data.stages; stage];
-                                    mouse_data.n_epochs_per_mouse = [mouse_data.n_epochs_per_mouse; n_epochs];
-                                    mouse_data.scales = dataset.mse_scales;
-                                end
+                                % Store mouse-level data
+                                mouse_data.mouse_averages = [mouse_data.mouse_averages; mouse_avg];
+                                mouse_data.mouse_ids{end+1} = sprintf('%s_%s', mouse_id, stage);
+                                mouse_data.stages = [mouse_data.stages; stage];
+                                mouse_data.n_epochs_per_mouse = [mouse_data.n_epochs_per_mouse; n_epochs];
+                                mouse_data.scales = dataset.mse_scales;
                             end
                         end
                     end
-
-                    % Store mouse-level data
-                    field_name = sprintf('ch%d', channel);
-                    all_data.(session).(condition).(field_name) = mouse_data;
-                    fprintf('    %s Channel %d: %d mouse-level averages\n', ...
-                        condition, channel, size(mouse_data.mouse_averages, 1));
                 end
+
+                % Store mouse-level data
+                field_name = sprintf('ch%d', channel);
+                all_data.(condition).(field_name) = mouse_data;
+                fprintf('    %s Channel %d: %d mouse-level averages\n', ...
+                    condition, channel, size(mouse_data.mouse_averages, 1));
             end
         end
     end
@@ -141,8 +135,6 @@ fprintf('\nRunning PLS Analysis...\n');
 for ch = 1:length(channels)
     channel = channels(ch);
     field_name = sprintf('ch%d', channel);
-
-    session = sessions{1}; % Single session
     
     fprintf('Processing Channel %d...\n', channel);
     
@@ -155,10 +147,10 @@ for ch = 1:length(channels)
             condition_check = conditions{c_check};
             
             actual_count = 0;
-            if isfield(all_data, session) && isfield(all_data.(session), condition_check) && ...
-                    isfield(all_data.(session).(condition_check), field_name)
+            if isfield(all_data, condition_check) && ...
+                    isfield(all_data.(condition_check), field_name)
                 
-                data_struct_check = all_data.(session).(condition_check).(field_name);
+                data_struct_check = all_data.(condition_check).(field_name);
                 if ~isempty(data_struct_check.mouse_averages)
                     stage_idx_check = data_struct_check.stages == stage_check;
                     actual_count = sum(stage_idx_check);
@@ -194,10 +186,10 @@ for ch = 1:length(channels)
         for c = 1:length(conditions)
             condition = conditions{c};
             
-            if isfield(all_data, session) && isfield(all_data.(session), condition) && ...
-                    isfield(all_data.(session).(condition), field_name)
+            if isfield(all_data, condition) && ...
+                    isfield(all_data.(condition), field_name)
                 
-                data_struct = all_data.(session).(condition).(field_name);
+                data_struct = all_data.(condition).(field_name);
                 
                 if ~isempty(data_struct.mouse_averages)
                     stage_idx = data_struct.stages == stage;
@@ -281,99 +273,4 @@ for ch = 1:length(channels)
                     if pvals(pv) < 0.001
                         fprintf('LV%d<0.001 ', pv);
                     elseif pvals(pv) < 0.05
-                        fprintf('LV%d=%.4f* ', pv, pvals(pv));
-                    else
-                        fprintf('LV%d=%.4f ', pv, pvals(pv));
-                    end
-                end
-                fprintf('\n');
-                
-                % Plot LV1 only
-                if length(pvals) >= 1
-                    LV = 1;
-                    p = pvals(LV);
-                    headline = sprintf('Group×Stage: Ch%d, LV%d p=%.4f', ...
-                        channel, LV, p);
-                    
-                    figure('Position', [100 100 1000 500]);
-                    
-                    % Bar plot
-                    subplot(1,2,1)
-                    z = pls_result.boot_result.orig_usc;
-                    bar_handle = bar(z(:,LV));
-                    hold on
-                    
-                    % Color bars
-                    bar_colors = zeros(length(group_labels_pls), 3);
-                    for i = 1:length(group_labels_pls)
-                        if contains(group_labels_pls{i}, 'Sham')
-                            bar_colors(i, :) = [0.3 0.6 0.9];
-                        else
-                            bar_colors(i, :) = [0.9 0.4 0.3];
-                        end
-                    end
-                    bar_handle.CData = bar_colors;
-                    
-                    % Error bars
-                    yneg = pls_result.boot_result.llusc(:,LV);
-                    ypos = pls_result.boot_result.ulusc(:,LV);
-                    errorbar(1:length(z), z(:,LV), yneg - z(:,LV), ypos - z(:,LV), '.', 'Color', 'black')
-                    
-                    xticks(1:length(group_labels_pls))
-                    xticklabels(group_labels_pls)
-                    xtickangle(45)
-                    grid on
-                    title('Stage×Group Contrast Scores')
-                    ylabel('Contrast Scores')
-                    xlabel('Condition by Sleep Stage')
-                    
-                    % Separator line between Sham and TBI groups
-                    num_sham = sum(contains(group_labels_pls, 'Sham'));
-                    xline(num_sham + 0.5, '--k', 'LineWidth', 2, 'Alpha', 0.7);
-                    
-                    % Heatmap
-                    subplot(1,2,2)
-                    x = pls_result.boot_result.compare_u(:,LV);
-                    x(abs(x)<2.3) = 0;
-                    data_struct = all_data.(session).(conditions{1}).(field_name);
-                    scales = data_struct.scales;
-                    plotdata = reshape(x, length(scales), []);
-                    
-                    imagesc(plotdata)
-                    colormap(rgb)
-                    clim([-7 7])
-                    colorbar
-                    yticks(1:5:length(scales))
-                    yticklabels(1:5:length(scales))
-                    xticks([])
-                    title(sprintf('Salience LV%d', LV))
-                    ylabel('Temporal Scale')
-                    
-                    sgtitle(headline, 'FontSize', 16, 'Interpreter', 'none')
-                    set(gcf, 'Color', 'w')
-                    
-                    % Save figure
-                    fig_filename = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d_LV%d.png', ...
-                        channel, LV));
-                    saveas(gcf, fig_filename)
-                    
-                    fig_filename_highres = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d_LV%d.fig', ...
-                        channel, LV));
-                    saveas(gcf, fig_filename_highres)
-                    
-                    fprintf('  Saved: %s\n', fig_filename);
-                end
-                
-                % Save results
-                save_filename = fullfile(results_dir, sprintf('GroupStage_PLS_ch%d.mat', ...
-                    channel));
-                save(save_filename, 'pls_result', 'pvals', 'group_sizes', 'conditions', ...
-                    'stages', 'channel', 'interaction_data', ...
-                    'group_labels_pls', 'unique_stage_nums');
-            end
-        end
-    end
-end
-
-fprintf('\nAnalysis complete!\n');
-end
+                        fprintf('LV%d=%.4f* ', pv, pvals(p
