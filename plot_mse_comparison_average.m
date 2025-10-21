@@ -1,4 +1,4 @@
-function plot_mse_comparison_average(base_path, conditions)
+function plot_individual_session_mse_comparison_mouse(base_path, conditions)
 % Plot MSE curves comparing conditions across sleep stages for both channels
 % Shows mean with shaded error bars (SEM)
 % Conditions: TBI vs Sham
@@ -104,7 +104,15 @@ fprintf('\nCreating plots...\n');
 
 for ch = 1:length(channels)
     channel = channels(ch);
-    fprintf('Processing Channel %d plots...\n', channel);
+    
+    % Set channel name
+    if channel == 1
+        channel_name = 'Parietal';
+    else
+        channel_name = 'Frontal';
+    end
+    
+    fprintf('Processing Channel %d (%s) plots...\n', channel, channel_name);
 
     % Create mse_plots directory
     plot_dir = fullfile(base_path, 'mse_plots');
@@ -116,7 +124,7 @@ for ch = 1:length(channels)
     for st = 1:length(stages)
         stage = stages(st);
         
-        fprintf('  Creating %s plot for Channel %d...\n', stage, channel);
+        fprintf('  Creating %s %s plot...\n', stage, channel_name);
         
         % Create individual plot for this stage
         figure('Position', [100 100 1000 700], 'Visible', 'off');
@@ -197,10 +205,10 @@ for ch = 1:length(channels)
 
         % Only create plot if we have data
         if ~isempty(legend_handles)
-            xlabel('Temporal Scale', 'FontSize', 12);
-            ylabel('Sample Entropy', 'FontSize', 12);
-            title(sprintf('%s Stage - Channel %d', stage, channel), 'FontSize', 14);
-            legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 10);
+            xlabel('Temporal Scale', 'FontSize', 24);
+            ylabel('Sample Entropy', 'FontSize', 24);
+            title(sprintf('%s %s', stage, channel_name), 'FontSize', 32);
+            legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 16);
             grid on;
 
             % Save plot
@@ -215,7 +223,7 @@ for ch = 1:length(channels)
             savefig(gcf, plot_filename_fig, 'compact');
             fprintf('    Saved FIG: %s\n', plot_filename_fig);
         else
-            fprintf('    No data for %s Channel %d - skipping plot\n', stage, channel);
+            fprintf('    No data for %s %s - skipping plot\n', stage, channel_name);
         end
 
         close(gcf);
