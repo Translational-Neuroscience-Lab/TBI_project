@@ -210,6 +210,7 @@ for ch = 1:length(channels)
             title(sprintf('%s %s', stage, channel_name), 'FontSize', 32);
             legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 16);
             grid on;
+            set(gca, 'FontSize', 20);
 
             % Save plot
             plot_filename_png = fullfile(plot_dir, sprintf('%s_ch%d_average.png', stage, channel));
@@ -220,7 +221,7 @@ for ch = 1:length(channels)
             fprintf('    Saved PNG: %s\n', plot_filename_png);
             
             % Save as FIG
-            savefig(gcf, plot_filename_fig, 'compact');
+            savefig(plot_filename_fig);
             fprintf('    Saved FIG: %s\n', plot_filename_fig);
         else
             fprintf('    No data for %s %s - skipping plot\n', stage, channel_name);
