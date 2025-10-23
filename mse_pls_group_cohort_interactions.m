@@ -1,4 +1,4 @@
-function mse_pls_group_cohort_interactions(base_path)
+function mse_pls_group_session_interactions(base_path)
 % Group-by-session interaction analysis for MSE data
 % Tests whether Sham vs TBI differences change across sessions
 
@@ -228,12 +228,12 @@ for ch = 1:length(channels)
             unique_sessions = unique(session_labels);
             unique_sessions = sort(unique_sessions);
             
-            % All Sham first, then all TBI
+            % Organize by session: for each session, Sham then TBI
             for s = 1:length(unique_sessions)
                 session_idx_num = unique_sessions(s);
                 session_name = sessions{session_idx_num};
                 
-                % Sham
+                % Sham for this session
                 session_idx = session_labels == session_idx_num;
                 group_idx = group_labels == 0; % Sham = 0
                 combo_idx = session_idx & group_idx;
@@ -244,14 +244,8 @@ for ch = 1:length(channels)
                     group_sizes(end+1) = size(combo_data, 1);
                     group_labels_pls{end+1} = sprintf('Sham %s', session_name);
                 end
-            end
-            
-            for s = 1:length(unique_sessions)
-                session_idx_num = unique_sessions(s);
-                session_name = sessions{session_idx_num};
                 
-                % TBI
-                session_idx = session_labels == session_idx_num;
+                % TBI for this session
                 group_idx = group_labels == 1; % TBI = 1
                 combo_idx = session_idx & group_idx;
                 
@@ -327,9 +321,9 @@ for ch = 1:length(channels)
                         ylabel('Contrast Scores')
                         xlabel('Condition by Session')
                         
-                        % Separator line between Sham and TBI groups
-                        num_sham = sum(contains(group_labels_pls, 'Sham'));
-                        xline(num_sham + 0.5, '--k', 'LineWidth', 2, 'Alpha', 0.7);
+                        % Separator line between 6m and 12m sessions
+                        num_6m_groups = sum(contains(group_labels_pls, '6m'));
+                        xline(num_6m_groups + 0.5, '--k', 'LineWidth', 2, 'Alpha', 0.7);
                         
                         % Heatmap
                         subplot(1,2,2)
