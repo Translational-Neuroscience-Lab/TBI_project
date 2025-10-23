@@ -9,7 +9,7 @@ fprintf('Using subject-based SEM with shaded error regions...\n');
 % Initialize storage
 all_data = struct();
 stages = ["Wake", "NREM", "REM"];
-colors_conditions = {[0, 0.4470, 0.7410], [0.8500, 0.3250, 0.0980]};  % Blue and Red RGB
+colors_conditions = {[0.63, 0, 0], [0, 0, 0.5]};  % Blue and Red RGB
 channels = [1, 2];
 channel_names = {'Parietal', 'Frontal'};
 
@@ -188,7 +188,7 @@ for ch = 1:length(channels)
                         
                         % Plot shaded area
                         fill([scales, fliplr(scales)], [upper_bound, fliplr(lower_bound)], ...
-                             color_rgb, 'FaceAlpha', 0.2, 'EdgeColor', 'none', ...
+                             color_rgb, 'FaceAlpha', 0.33, 'EdgeColor', 'none', ...
                              'HandleVisibility', 'off');
                         hold on;
                         
