@@ -1,4 +1,4 @@
-function plot_individual_session_mse_comparison_cohorts(base_path, sessions, conditions)
+function plot_sessions_mse_comparison_cohorts(base_path, sessions, conditions)
 % Plot MSE curves for individual sessions comparing TBI vs Sham conditions across sleep stages
 % Shows mean curves with shaded SEM calculated from individual subjects
 sessions = {'MSE_NLF_12m_chronic', 'MSE_NLF_6m_chronic'};
@@ -9,7 +9,10 @@ fprintf('Using subject-based SEM with shaded error regions...\n');
 % Initialize storage
 all_data = struct();
 stages = ["Wake", "NREM", "REM"];
-colors_conditions = {[0.63, 0, 0], [0, 0, 0.5]};  % Blue and Red RGB
+% Colors: TBI (red shades), Sham (blue shades)
+% 6m group uses darker shades, 12m group uses lighter shades
+colors_6m = {[0.63, 0, 0], [0, 0, 0.5]};  % Dark red and Dark blue for 6m
+colors_12m = {[1, 0.4, 0.4], [0.4, 0.4, 1]};  % Light red and Light blue for 12m
 channels = [1, 2];
 channel_names = {'Parietal', 'Frontal'};
 
@@ -122,36 +125,44 @@ for ch = 1:length(channels)
     end
 end
 
-% Create plots
-fprintf('\nCreating individual session plots...\n');
+% Create plots - combined across sessions
+fprintf('\nCreating combined session plots...\n');
 
 for ch = 1:length(channels)
     channel = channels(ch);
     channel_name = channel_names{ch};
     fprintf('Processing Channel %d (%s) plots...\n', channel, channel_name);
 
-    % Session-by-session comparison plots for this channel
-    for s = 1:length(sessions)
-        session = sessions{s};
-        fprintf('  Creating plots for %s...\n', session);
+    % Create mse_plots directory in base path
+    plot_dir = fullfile(base_path, 'mse_plots_combined');
+    if ~exist(plot_dir, 'dir')
+        mkdir(plot_dir);
+    end
 
-        % Create mse_plots directory for this session
-        plot_dir = fullfile(base_path, session, 'mse_plots');
-        if ~exist(plot_dir, 'dir')
-            mkdir(plot_dir);
-        end
+    % Create plots for each sleep stage (combining all sessions)
+    for st = 1:length(stages)
+        stage = stages(st);
+        
+        fprintf('  Creating %s plot for Channel %d (%s)...\n', stage, channel, channel_name);
+        
+        % Create individual plot for this stage
+        figure('Position', [100 100 900 600], 'Visible', 'off');
 
-        % Create plots for each sleep stage
-        for st = 1:length(stages)
-            stage = stages(st);
+        legend_entries = {};
+        legend_handles = [];
+
+        % Loop through sessions first, then conditions
+        for s = 1:length(sessions)
+            session = sessions{s};
             
-            fprintf('    Creating %s plot for Channel %d (%s)...\n', stage, channel, channel_name);
-            
-            % Create individual plot for this stage
-            figure('Position', [100 100 900 600], 'Visible', 'off');
-
-            legend_entries = {};
-            legend_handles = [];
+            % Extract session label (6m or 12m)
+            if contains(session, '6m')
+                session_label = '6m';
+            elseif contains(session, '12m')
+                session_label = '12m';
+            else
+                session_label = session;
+            end
 
             for c = 1:length(conditions)
                 condition = conditions{c};
@@ -175,11 +186,15 @@ for ch = 1:length(channels)
                         grand_sem = grand_std / sqrt(n_subjects);
                         
                         % Debug output
-                        fprintf('        %s: %d subjects, SEM range: %.6f to %.6f\n', ...
-                               condition, n_subjects, min(grand_sem), max(grand_sem));
+                        fprintf('    %s %s: %d subjects, SEM range: %.6f to %.6f\n', ...
+                               session_label, condition, n_subjects, min(grand_sem), max(grand_sem));
 
-                        % Get color
-                        color_rgb = colors_conditions{c};
+                        % Get color based on session and condition
+                        if contains(session, '6m')
+                            color_rgb = colors_6m{c};
+                        else
+                            color_rgb = colors_12m{c};
+                        end
                         
                         % Create shaded error region
                         scales = data_struct.scales;
@@ -198,38 +213,38 @@ for ch = 1:length(channels)
                         
                         % Store legend info
                         legend_handles(end+1) = h;
-                        legend_entries{end+1} = sprintf('%s (n=%d)', condition, n_subjects);
+                        legend_entries{end+1} = sprintf('%s %s (n=%d)', session_label, condition, n_subjects);
                     end
                 end
             end
-
-            % Only finalize plot if we have data
-            if ~isempty(legend_handles)
-                xlabel('Temporal Scale', 'FontSize', 12);
-                ylabel('Sample Entropy', 'FontSize', 12);
-                title(sprintf('%s: %s Stage - %s', session, stage, channel_name), 'FontSize', 14);
-                legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 10);
-                grid on;
-
-                % Save plot
-                plot_filename_png = fullfile(plot_dir, sprintf('%s_%s_%s.png', ...
-                                           session, stage, channel_name));
-                plot_filename_fig = fullfile(plot_dir, sprintf('%s_%s_%s.fig', ...
-                                           session, stage, channel_name));
-                
-                % Save as PNG
-                print(gcf, plot_filename_png, '-dpng', '-r300');
-                fprintf('      Saved PNG: %s\n', plot_filename_png);
-                
-                % Save as FIG
-                savefig(gcf, plot_filename_fig, 'compact');
-                fprintf('      Saved FIG: %s\n', plot_filename_fig);
-            else
-                fprintf('      No data for %s %s - skipping plot\n', stage, channel_name);
-            end
-
-            close(gcf);
         end
+
+        % Only finalize plot if we have data
+        if ~isempty(legend_handles)
+            xlabel('Temporal Scale', 'FontSize', 12);
+            ylabel('Sample Entropy', 'FontSize', 12);
+            title(sprintf('%s Stage - %s (All Sessions)', stage, channel_name), 'FontSize', 14);
+            legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 10);
+            grid on;
+
+            % Save plot
+            plot_filename_png = fullfile(plot_dir, sprintf('%s_%s_combined.png', ...
+                                       stage, channel_name));
+            plot_filename_fig = fullfile(plot_dir, sprintf('%s_%s_combined.fig', ...
+                                       stage, channel_name));
+            
+            % Save as PNG
+            print(gcf, plot_filename_png, '-dpng', '-r300');
+            fprintf('    Saved PNG: %s\n', plot_filename_png);
+            
+            % Save as FIG
+            savefig(gcf, plot_filename_fig, 'compact');
+            fprintf('    Saved FIG: %s\n', plot_filename_fig);
+        else
+            fprintf('    No data for %s %s - skipping plot\n', stage, channel_name);
+        end
+
+        close(gcf);
     end
 end
 
