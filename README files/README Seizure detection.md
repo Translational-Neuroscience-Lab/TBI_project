@@ -31,7 +31,7 @@ It is tailored for data collected using Sirenia Acquisition (Pinnacle Technology
 ## How to use it:
 
 - Change the filepath according to the file that needs processing
-- Set the threshold accordingly (we recommend a minimum of 5 SD) in the "detectionResults, epochStats" after "fs" and under "visualizeDetectionResults" after "seizures"
+- Default threshold detection is at 5SD. To change it, add or change the fourth argument under "detectionResults, epochStats" after "fs" and the 6th argument under "visualizeDetectionResults" after "seizures"
 
 
 
