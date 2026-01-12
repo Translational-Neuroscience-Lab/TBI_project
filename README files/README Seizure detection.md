@@ -13,8 +13,8 @@ It is tailored for data collected using Sirenia Acquisition (Pinnacle Technology
 
 ## Input files:
 
-.edf file: Contains raw EEG time series
-.tsv file: Contains epoch-level sleep scoring (Wake = 1, NREM = 2, REM = 3, Unscored = 255)
+- .edf file: Contains raw EEG time series
+- .tsv file: Contains epoch-level sleep scoring (Wake = 1, NREM = 2, REM = 3, Unscored = 255)
 
 ## What the script does:
 
