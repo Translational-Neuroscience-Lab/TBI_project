@@ -1,3 +1,4 @@
+%% THIS IS AN OLD VERSION OF THE SEIZURE DETECTION CODE (DOES NOT INCLUDE SLEEP DATA)
 filepath = 'S:\LAB_Kent\Studies\TBI\Scored_Data\Seizure\NLF\EDF files\Mouse#4_2022-03-01_08_45_03_export.edf';
 [epochs, fs, channelLabels, metadata] = loadAndEpochEEG(filepath);
 [detectionResults, epochStats] = detectSeizures(epochs, channelLabels, fs, 7);
