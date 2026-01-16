@@ -1,0 +1,797 @@
+% STEP 1: READ EDF AND CREATE A DATA FILE WITH THE DATE/TIME COLUMN
+% EDF Reader with DateTime Column
+% This script reads EDF file and adds a DateTime column for each 10-sec epoch
+% Every time you run a different mouse you need to change line #9
+% (edf_filename) and line #96 (tsv_filename). When detection is complete
+% make sure to change the output filename
+
+%% 1. Read EDF file and info
+edf_filename = 'Mouse#1_2022-03-01_08_45_12_export.edf'; %UPDATE THIS file name as needed
+edfinfo = edfinfo(edf_filename);
+data = edfread(edf_filename);
+
+%% 2. Extract start date and time from edfinfo
+start_date_str = edfinfo.StartDate; % '03.03.22'
+start_time_str = edfinfo.StartTime; % '09.59.50'
+
+% Display the raw strings for debugging
+fprintf('Raw start date: %s\n', start_date_str);
+fprintf('Raw start time: %s\n', start_time_str);
+
+% Parse date components
+date_parts = strsplit(start_date_str, '.');
+day = str2double(date_parts{1});
+month = str2double(date_parts{2});
+year = str2double(date_parts{3});
+if year < 100
+    year = 2000 + year; % Convert 22 to 2022
+end
+
+% Parse time components (replace dots with colons first)
+start_time_str = strrep(start_time_str, '.', ':');
+time_parts = strsplit(start_time_str, ':');
+hour = str2double(time_parts{1});
+minute = str2double(time_parts{2});
+second = str2double(time_parts{3});
+
+% Create datetime from components
+start_datetime = datetime(year, month, day, hour, minute, second);
+
+fprintf('Parsed datetime: %s\n', char(start_datetime));
+
+%% 3. Calculate datetime for each row (epoch)
+num_epochs = height(data);
+epoch_duration = 10; % seconds
+
+% Create datetime array for each epoch (starting from epoch 0)
+epoch_times = start_datetime + seconds((0:num_epochs-1)' * epoch_duration);
+
+%% 4. Add DateTime column to the data timetable
+data.DateTime = epoch_times;
+
+%% 5. Remove unwanted columns
+% List of column names to remove
+columns_to_remove = {
+    'SignalLabel4_EEG1_FuA_B'
+    'SignalLabel4_EEG2_FuA_B'
+    'SignalLabel5_EEG1_FuA_B'
+    'SignalLabel6_EEG1_AlA_B'
+    'SignalLabel7_EEG1_BeA_B'
+    'SignalLabel8_EEG1_GaA_B'
+    'SignalLabel9_EEG1_DeA_B'
+    'SignalLabel10_EEG1_ThA_B'
+    'SignalLabel11_EEG2_FuA_B'
+    'SignalLabel12_EEG2_AlA_B'
+    'SignalLabel13_EEG2_BeA_B'
+    'SignalLabel14_EEG2_GaA_B'
+    'SignalLabel15_EEG2_DeA_B'
+    'SignalLabel16_EEG2_ThA_B'
+    'SignalLabel17_EMG_Ful'
+    'SignalLabel18_EMG_10_'
+    'SignalLabel19_EMG_50_'
+    'SignalLabel20_EMG_100'
+    'SignalLabel21_EMG_150'
+    'SignalLabel22_EMG_50_'
+};
+
+% Remove columns that exist in the data
+existing_columns = columns_to_remove(ismember(columns_to_remove, data.Properties.VariableNames));
+data = removevars(data, existing_columns);
+
+fprintf('Removed %d columns\n', length(existing_columns));
+
+%% 6. Display results
+fprintf('Data loaded successfully!\n');
+fprintf('Total epochs: %d\n', num_epochs);
+fprintf('Start time: %s\n', char(start_datetime));
+fprintf('End time: %s\n', char(epoch_times(end)));
+fprintf('Recording duration: %.2f hours\n', num_epochs * epoch_duration / 3600);
+fprintf('Remaining columns: %d\n', width(data));
+fprintf('\nFirst few rows of data:\n');
+disp(data(1:5, :));
+
+%%
+%STEP 2: ADD STATE DATA TO THE EDF DATA FILE
+%% 7. Read TSV file with vigilance states
+tsv_filename = 'Mouse#1_2022-03-01_08_45_12_scores.tsv'; % UPDATE THIS with your actual TSV filename
+
+% Read TSV file, skipping first 10 rows of metadata
+tsv_data = readtable(tsv_filename, 'FileType', 'text', 'Delimiter', '\t', ...
+    'HeaderLines', 10);
+
+% Display TSV structure
+fprintf('\nTSV file loaded with %d rows (after skipping 10 metadata rows)\n', height(tsv_data));
+fprintf('TSV columns: %s\n', strjoin(tsv_data.Properties.VariableNames, ', '));
+disp('First few rows of TSV:');
+disp(tsv_data(1:5, :));
+
+%% 8. Parse TSV datetime and match with data
+% Find date and time columns (case-insensitive search)
+var_names = tsv_data.Properties.VariableNames;
+date_col = var_names(contains(lower(var_names), 'date'));
+time_col = var_names(contains(lower(var_names), 'time') & ~contains(lower(var_names), 'from'));
+
+if isempty(date_col) || isempty(time_col)
+    error('Could not find date/time columns in TSV. Available columns: %s', ...
+        strjoin(var_names, ', '));
+end
+
+date_col = date_col{1};
+time_col = time_col{1};
+
+fprintf('Using date column: %s\n', date_col);
+fprintf('Using time column: %s\n', time_col);
+
+% Combine date and time from TSV into datetime format
+% Date format: M/d/yyyy, Time format: HH:mm:ss
+tsv_datetime = datetime(strcat(string(tsv_data.(date_col)), {' '}, string(tsv_data.(time_col))), ...
+    'InputFormat', 'M/d/yyyy HH:mm:ss');
+
+%% 9. Match and assign vigilance states
+% Find state score column (look for column ending with "_Numeric")
+state_col = var_names(contains(lower(var_names), '_numeric'));
+if isempty(state_col)
+    error('Could not find state score column ending with "_Numeric". Available columns: %s', ...
+        strjoin(var_names, ', '));
+end
+state_col = state_col{1};
+fprintf('Using state column: %s\n', state_col);
+
+% Convert numeric state codes to text labels
+% 1=Wake, 2=NREM, 3=REM, 255=unscored
+state_numeric = tsv_data.(state_col);
+
+% Ensure state_numeric is numeric
+if iscell(state_numeric)
+    state_numeric = cellfun(@str2double, state_numeric);
+elseif ischar(state_numeric) || isstring(state_numeric)
+    state_numeric = str2double(state_numeric);
+end
+
+state_labels = cell(length(state_numeric), 1);
+
+for i = 1:length(state_numeric)
+    switch state_numeric(i)
+        case 1
+            state_labels{i} = 'Wake';
+        case 2
+            state_labels{i} = 'NREM';
+        case 3
+            state_labels{i} = 'REM';
+        case 255
+            state_labels{i} = 'Unscored';
+        otherwise
+            state_labels{i} = 'Unknown';
+    end
+end
+
+fprintf('State label conversion: %d Wake, %d NREM, %d REM, %d Unscored\n', ...
+    sum(strcmp(state_labels, 'Wake')), sum(strcmp(state_labels, 'NREM')), ...
+    sum(strcmp(state_labels, 'REM')), sum(strcmp(state_labels, 'Unscored')));
+
+% Create a lookup table from TSV
+tsv_lookup = table(tsv_datetime, state_labels, ...
+    'VariableNames', {'DateTime', 'State'});
+
+% Match data DateTime with TSV DateTime and assign states
+% Allow for small time differences (up to 2 seconds tolerance)
+time_tolerance = seconds(2);
+
+% Initialize State column with 'Unmatched' string
+data.State = repmat({'Unmatched'}, height(data), 1);
+
+% Match each data epoch with closest TSV epoch within tolerance
+matched_count = 0;
+for i = 1:height(data)
+    % Find time differences between this data epoch and all TSV epochs
+    time_diffs = abs(data.DateTime(i) - tsv_lookup.DateTime);
+    
+    % Find closest match
+    [min_diff, closest_idx] = min(time_diffs);
+    
+    % If within tolerance, assign the state
+    if min_diff <= time_tolerance
+        data.State{i} = tsv_lookup.State{closest_idx};
+        matched_count = matched_count + 1;
+    end
+end
+
+matched_indices = ~strcmp(data.State, 'Unmatched');
+
+% Report matching results
+fprintf('\nMatching complete!\n');
+fprintf('Matched epochs: %d / %d (%.1f%%)\n', ...
+    matched_count, height(data), 100*matched_count/height(data));
+fprintf('Unmatched epochs: %d\n', height(data) - matched_count);
+
+%% 10. Display final results
+fprintf('\nFinal data structure:\n');
+disp(data(1:10, :));
+
+%%
+% *SEIZURE PART* 
+% Seizure Detection from Data Timetable
+
+%% Run seizure detection on the data timetable
+% Parameters
+fs = 400; % Sampling frequency
+threshold = 6; % Standard deviations above mean
+
+% Get channel names from data (excluding DateTime and State columns)
+allVars = data.Properties.VariableNames;
+channelVars = allVars(~ismember(allVars, {'DateTime', 'State'}));
+
+% Convert data timetable to epochs structure format
+epochs = struct();
+for i = 1:length(channelVars)
+    % Use the data directly as cell array of epochs
+    epochs.(channelVars{i}) = data.(channelVars{i});
+end
+
+% Run seizure detection
+[detectionResults, epochStats] = detectSeizures_fromData(epochs, channelVars, fs, threshold);
+
+% Add DateTime and State columns back to detection results
+detectionResults.DateTime = data.DateTime;
+detectionResults.State = data.State;
+
+% Display summary (will show only EEG channels with detections)
+displayDetectionSummary(detectionResults, channelVars);
+
+% Manual review with classification
+[reviewedResults, reviewSummary] = manualReviewSeizures_fromData(epochs, channelVars, detectionResults, fs, threshold);
+
+% Add DateTime and State to reviewed results
+reviewedResults.DateTime = data.DateTime;
+reviewedResults.State = data.State;
+
+% Save results
+output_filename = 'seizure_classification_results.xlsx';
+saveReviewedResults(reviewedResults, reviewSummary, output_filename);
+
+% Update the original data table with seizure information
+data = addSeizureInfoToData(data, reviewedResults, channelVars);
+
+fprintf('\nSeizure detection complete! Updated data table with seizure information.\n');
+
+%% Function: Seizure detection from data structure
+function [detectionResults, epochStats] = detectSeizures_fromData(epochs, channelLabels, fs, threshold)
+    % Detect potential seizure activity based on envelope amplitude
+    % Modified to work with data from timetable
+    
+    if nargin < 4
+        threshold = 5;
+    end
+    
+    fprintf('Running seizure detection with threshold = %.1f standard deviations above mean...\n', threshold);
+    fprintf('Note: EMG channel excluded from seizure detection\n\n');
+    
+    % Get number of epochs from first channel
+    firstChannel = channelLabels{1};
+    numEpochs = length(epochs.(firstChannel));
+    
+    % Initialize results table
+    epochNumbers = (0:numEpochs-1)'; % Start from epoch 0
+    startTimes = epochNumbers * 10;
+    
+    detectionResults = table(epochNumbers, startTimes, ...
+                            'VariableNames', {'EpochNum', 'StartTime_s'});
+    
+    epochStats = struct();
+    
+    %% Process each channel
+    for ch = 1:length(channelLabels)
+        fieldName = channelLabels{ch};
+        channelEpochs = epochs.(fieldName);
+        
+        % Check if this is the EMG channel
+        isEMG = contains(lower(fieldName), 'emg');
+        
+        if isEMG
+            fprintf('Processing channel: %s (EMG - statistics only, no seizure detection)\n', fieldName);
+        else
+            fprintf('Processing channel: %s (EEG - with seizure detection)\n', fieldName);
+        end
+        
+        % Initialize arrays for this channel
+        meanEnvelopes = zeros(numEpochs, 1);
+        stdEnvelopes = zeros(numEpochs, 1);
+        thresholdValues = zeros(numEpochs, 1);
+        maxPeaks = zeros(numEpochs, 1);
+        peakZScores = zeros(numEpochs, 1);
+        isSeizure = false(numEpochs, 1);
+        numPeaksExceeded = zeros(numEpochs, 1);
+        
+        % Process each epoch
+        for i = 1:numEpochs
+            signal = channelEpochs{i};
+            
+            % Calculate envelope amplitude using Hilbert transform
+            analyticSignal = hilbert(signal);
+            envelope = abs(analyticSignal);
+            
+            % Calculate mean and standard deviation of envelope
+            meanEnv = mean(envelope);
+            stdEnv = std(envelope);
+            meanEnvelopes(i) = meanEnv;
+            stdEnvelopes(i) = stdEnv;
+            
+            % Calculate threshold (mean + N*std)
+            thresholdVal = meanEnv + (threshold * stdEnv);
+            thresholdValues(i) = thresholdVal;
+            
+            % Find peaks in the envelope
+            [peakValues, ~] = findpeaks(envelope);
+            
+            if ~isempty(peakValues)
+                % Find maximum peak
+                maxPeak = max(peakValues);
+                maxPeaks(i) = maxPeak;
+                
+                % Calculate z-score of max peak
+                peakZScores(i) = (maxPeak - meanEnv) / stdEnv;
+                
+                % Count how many peaks exceed threshold
+                exceedingPeaks = peakValues > thresholdVal;
+                numPeaksExceeded(i) = sum(exceedingPeaks);
+                
+                % Flag as potential seizure ONLY if NOT EMG channel
+                if ~isEMG && maxPeak > thresholdVal
+                    isSeizure(i) = true;
+                end
+            else
+                maxPeaks(i) = max(envelope);
+                peakZScores(i) = (maxPeaks(i) - meanEnv) / stdEnv;
+            end
+        end
+        
+        % Store results in table
+        detectionResults.([fieldName '_MeanEnvelope']) = meanEnvelopes;
+        detectionResults.([fieldName '_StdEnvelope']) = stdEnvelopes;
+        detectionResults.([fieldName '_Threshold']) = thresholdValues;
+        detectionResults.([fieldName '_MaxPeak']) = maxPeaks;
+        detectionResults.([fieldName '_PeakZScore']) = peakZScores;
+        detectionResults.([fieldName '_NumPeaksExceeded']) = numPeaksExceeded;
+        
+        % Only add seizure flag for non-EMG channels
+        if ~isEMG
+            detectionResults.([fieldName '_SeizureFlag']) = isSeizure;
+        end
+        
+        % Store detailed statistics
+        epochStats.(fieldName).meanEnvelopes = meanEnvelopes;
+        epochStats.(fieldName).stdEnvelopes = stdEnvelopes;
+        epochStats.(fieldName).thresholdValues = thresholdValues;
+        epochStats.(fieldName).maxPeaks = maxPeaks;
+        epochStats.(fieldName).peakZScores = peakZScores;
+        epochStats.(fieldName).numPeaksExceeded = numPeaksExceeded;
+        
+        if ~isEMG
+            epochStats.(fieldName).isSeizure = isSeizure;
+            epochStats.(fieldName).numSeizureEpochs = sum(isSeizure);
+            epochStats.(fieldName).seizureEpochIndices = find(isSeizure);
+            fprintf('  Detected %d potential seizure epochs (%.1f%%)\n', ...
+                    sum(isSeizure), 100*sum(isSeizure)/numEpochs);
+        else
+            fprintf('  Statistics calculated (no seizure detection for EMG)\n');
+        end
+    end
+    
+    fprintf('\nDetection complete!\n\n');
+end
+
+%% Function: Manual review adapted for data structure
+function [reviewedResults, reviewSummary] = manualReviewSeizures_fromData(epochs, channelLabels, detectionResults, fs, thresholdValue)
+    
+    if nargin < 5
+        thresholdValue = 5;
+    end
+    
+    % Find all epochs flagged as seizures in any EEG channel
+    seizureFlags = false(height(detectionResults), 1);
+    for ch = 1:length(channelLabels)
+        fieldName = channelLabels{ch};
+        flagCol = [fieldName '_SeizureFlag'];
+        if ismember(flagCol, detectionResults.Properties.VariableNames)
+            seizureFlags = seizureFlags | detectionResults.(flagCol);
+        end
+    end
+    
+    seizureEpochs = find(seizureFlags);
+    totalSeizures = length(seizureEpochs);
+    
+    if totalSeizures == 0
+        fprintf('No seizure epochs detected to review.\n');
+        reviewedResults = detectionResults;
+        reviewSummary = struct('totalDetected', 0, 'accepted', 0, 'rejected', 0);
+        return;
+    end
+    
+    fprintf('\n========== MANUAL SEIZURE REVIEW ==========\n');
+    fprintf('Total detected seizure epochs: %d\n', totalSeizures);
+    fprintf('Instructions: Review each epoch and press a key:\n');
+    fprintf('  1 = Single Spike\n');
+    fprintf('  2 = Poly Spike\n');
+    fprintf('  3 = Spike-Wave Discharge\n');
+    fprintf('  4 = Seizure\n');
+    fprintf('  N = Reject (not a seizure/artifact)\n');
+    fprintf('  B = Go back to previous epoch\n');
+    fprintf('  Q = Quit review (remaining epochs kept as detected)\n');
+    fprintf('===========================================\n\n');
+    
+    % Initialize review arrays
+    manualReview = true(totalSeizures, 1);
+    eventType = cell(totalSeizures, 1);
+    for i = 1:totalSeizures
+        eventType{i} = 'Unreviewed';
+    end
+    reviewed = false(totalSeizures, 1);
+    
+    % Review each seizure epoch
+    currentIdx = 1;
+    
+    while currentIdx <= totalSeizures
+        epochNum = seizureEpochs(currentIdx);
+        
+        % Create figure for this epoch
+        fig = figure('Position', [100, 100, 1400, 800], 'Name', sprintf('Review Epoch %d of %d', currentIdx, totalSeizures));
+        
+        numChannels = length(channelLabels);
+        timeVector = (0:(fs*10)-1) / fs;
+        
+        for ch = 1:numChannels
+            fieldName = channelLabels{ch};
+            signal = epochs.(fieldName){epochNum};
+            
+            % Check if this is EMG channel
+            isEMG = contains(lower(fieldName), 'emg');
+            
+            % Calculate envelope
+            envelope = abs(hilbert(signal));
+            
+            % Get mean envelope and threshold
+            meanEnvCol = [fieldName '_MeanEnvelope'];
+            thresholdCol = [fieldName '_Threshold'];
+            
+            if ismember(meanEnvCol, detectionResults.Properties.VariableNames)
+                meanEnv = detectionResults.(meanEnvCol)(epochNum);
+            else
+                meanEnv = mean(envelope);
+            end
+            
+            if ismember(thresholdCol, detectionResults.Properties.VariableNames)
+                thresholdLine = detectionResults.(thresholdCol)(epochNum);
+            else
+                stdEnv = std(envelope);
+                thresholdLine = meanEnv + (thresholdValue * stdEnv);
+            end
+            
+            subplot(numChannels, 1, ch);
+            
+            % Plot signal
+            plot(timeVector, signal, 'b', 'LineWidth', 0.8);
+            hold on;
+            
+            if ~isEMG
+                plot([0 10], [meanEnv meanEnv], 'g--', 'LineWidth', 2);
+                plot([0 10], [thresholdLine thresholdLine], 'm--', 'LineWidth', 2);
+            end
+            
+            xlabel('Time (s)', 'FontSize', 11);
+            ylabel('Amplitude (\muV)', 'FontSize', 11);
+            
+            % Get title information
+            flagCol = [fieldName '_SeizureFlag'];
+            if ismember(flagCol, detectionResults.Properties.VariableNames)
+                zScoreCol = [fieldName '_PeakZScore'];
+                if ismember(zScoreCol, detectionResults.Properties.VariableNames)
+                    zScore = detectionResults.(zScoreCol)(epochNum);
+                    titleStr = sprintf('%s - Epoch %d (%.1f-%.1f s) - Z-score: %.2f', ...
+                        fieldName, detectionResults.EpochNum(epochNum), ...
+                        detectionResults.StartTime_s(epochNum), ...
+                        detectionResults.StartTime_s(epochNum)+10, zScore);
+                else
+                    titleStr = sprintf('%s - Epoch %d (%.1f-%.1f s)', ...
+                        fieldName, detectionResults.EpochNum(epochNum), ...
+                        detectionResults.StartTime_s(epochNum), ...
+                        detectionResults.StartTime_s(epochNum)+10);
+                end
+                title(titleStr, 'FontSize', 12, 'FontWeight', 'bold', 'Color', 'r');
+            else
+                titleStr = sprintf('%s - Epoch %d - EMG', ...
+                    fieldName, detectionResults.EpochNum(epochNum));
+                title(titleStr, 'FontSize', 12, 'FontWeight', 'bold');
+            end
+            
+            if ch == 1 && ~isEMG
+                legend({'Signal', 'Mean Env', sprintf('Mean + %.1f SD', thresholdValue)}, ...
+                       'Location', 'northwest', 'FontSize', 10);
+            end
+            
+            grid on;
+            xlim([0 10]);
+            hold off;
+        end
+        
+        sgtitle(sprintf('REVIEW EPOCH %d of %d - 1:Single Spike | 2:Poly Spike | 3:Spike-Wave | 4:Seizure | N:Reject | B:Back | Q:Quit', ...
+                currentIdx, totalSeizures), 'FontSize', 13, 'FontWeight', 'bold');
+        
+        % Wait for user input
+        validInput = false;
+        while ~validInput
+            keyPress = waitforbuttonpress;
+            if keyPress == 1
+                key = get(fig, 'CurrentCharacter');
+                keyUpper = upper(key);
+                
+                if strcmp(key, '1')
+                    manualReview(currentIdx) = true;
+                    eventType{currentIdx} = 'Single Spike';
+                    reviewed(currentIdx) = true;
+                    fprintf('Epoch %d: Single Spike\n', detectionResults.EpochNum(epochNum));
+                    validInput = true;
+                    currentIdx = currentIdx + 1;
+                    
+                elseif strcmp(key, '2')
+                    manualReview(currentIdx) = true;
+                    eventType{currentIdx} = 'Poly Spike';
+                    reviewed(currentIdx) = true;
+                    fprintf('Epoch %d: Poly Spike\n', detectionResults.EpochNum(epochNum));
+                    validInput = true;
+                    currentIdx = currentIdx + 1;
+                    
+                elseif strcmp(key, '3')
+                    manualReview(currentIdx) = true;
+                    eventType{currentIdx} = 'Spike-Wave';
+                    reviewed(currentIdx) = true;
+                    fprintf('Epoch %d: Spike-Wave Discharge\n', detectionResults.EpochNum(epochNum));
+                    validInput = true;
+                    currentIdx = currentIdx + 1;
+                    
+                elseif strcmp(key, '4')
+                    manualReview(currentIdx) = true;
+                    eventType{currentIdx} = 'Seizure';
+                    reviewed(currentIdx) = true;
+                    fprintf('Epoch %d: Seizure\n', detectionResults.EpochNum(epochNum));
+                    validInput = true;
+                    currentIdx = currentIdx + 1;
+                    
+                elseif strcmp(keyUpper, 'N')
+                    manualReview(currentIdx) = false;
+                    eventType{currentIdx} = 'Rejected';
+                    reviewed(currentIdx) = true;
+                    fprintf('Epoch %d: REJECTED\n', detectionResults.EpochNum(epochNum));
+                    validInput = true;
+                    currentIdx = currentIdx + 1;
+                    
+                elseif strcmp(keyUpper, 'B')
+                    if currentIdx > 1
+                        currentIdx = currentIdx - 1;
+                        fprintf('Going back to epoch %d\n', detectionResults.EpochNum(seizureEpochs(currentIdx)));
+                        validInput = true;
+                    else
+                        fprintf('Already at first epoch.\n');
+                    end
+                    
+                elseif strcmp(keyUpper, 'Q')
+                    fprintf('\nReview stopped at epoch %d of %d\n', currentIdx, totalSeizures);
+                    validInput = true;
+                    close(fig);
+                    break;
+                end
+            end
+        end
+        
+        if ishandle(fig)
+            close(fig);
+        end
+        
+        if strcmp(keyUpper, 'Q')
+            break;
+        end
+    end
+    
+    % Update detection results with manual review
+    reviewedResults = detectionResults;
+    
+    % Add event classification column
+    eventClassification = cell(height(detectionResults), 1);
+    for i = 1:height(detectionResults)
+        eventClassification{i} = 'None';
+    end
+    
+    for i = 1:length(seizureEpochs)
+        epochIdx = seizureEpochs(i);
+        if reviewed(i)
+            eventClassification{epochIdx} = eventType{i};
+        else
+            eventClassification{epochIdx} = 'Unreviewed';
+        end
+    end
+    
+    reviewedResults.EventType = eventClassification;
+    
+    % Add manual review columns for each EEG channel
+    for ch = 1:length(channelLabels)
+        fieldName = channelLabels{ch};
+        flagCol = [fieldName '_SeizureFlag'];
+        
+        if ismember(flagCol, detectionResults.Properties.VariableNames)
+            manualReviewCol = false(height(detectionResults), 1);
+            
+            for i = 1:length(seizureEpochs)
+                if reviewed(i)
+                    epochIdx = seizureEpochs(i);
+                    if detectionResults.(flagCol)(epochIdx)
+                        manualReviewCol(epochIdx) = manualReview(i);
+                    end
+                else
+                    epochIdx = seizureEpochs(i);
+                    manualReviewCol(epochIdx) = detectionResults.(flagCol)(epochIdx);
+                end
+            end
+            
+            reviewedResults.([fieldName '_ManualReview']) = manualReviewCol;
+        end
+    end
+    
+    % Calculate review summary
+    numReviewed = sum(reviewed);
+    numAccepted = sum(manualReview(reviewed));
+    numRejected = sum(~manualReview(reviewed));
+    
+    numSingleSpike = sum(strcmp(eventType(reviewed), 'Single Spike'));
+    numPolySpike = sum(strcmp(eventType(reviewed), 'Poly Spike'));
+    numSpikeWave = sum(strcmp(eventType(reviewed), 'Spike-Wave'));
+    numSeizure = sum(strcmp(eventType(reviewed), 'Seizure'));
+    
+    reviewSummary.totalDetected = totalSeizures;
+    reviewSummary.reviewed = numReviewed;
+    reviewSummary.accepted = numAccepted;
+    reviewSummary.rejected = numRejected;
+    reviewSummary.notReviewed = totalSeizures - numReviewed;
+    reviewSummary.singleSpike = numSingleSpike;
+    reviewSummary.polySpike = numPolySpike;
+    reviewSummary.spikeWave = numSpikeWave;
+    reviewSummary.seizure = numSeizure;
+    
+    fprintf('\n========== REVIEW SUMMARY ==========\n');
+    fprintf('Total detected events: %d\n', totalSeizures);
+    fprintf('Reviewed: %d\n', numReviewed);
+    fprintf('  Accepted: %d\n', numAccepted);
+    fprintf('    - Single Spike: %d\n', numSingleSpike);
+    fprintf('    - Poly Spike: %d\n', numPolySpike);
+    fprintf('    - Spike-Wave Discharge: %d\n', numSpikeWave);
+    fprintf('    - Seizure: %d\n', numSeizure);
+    fprintf('  Rejected: %d\n', numRejected);
+    fprintf('Not reviewed: %d (kept as detected)\n', reviewSummary.notReviewed);
+    fprintf('====================================\n\n');
+    
+    displayManualReviewSummary(reviewedResults, channelLabels);
+end
+
+%% Helper functions from original code
+function displayDetectionSummary(detectionResults, channelLabels)
+    fprintf('\n========== SEIZURE DETECTION SUMMARY ==========\n\n');
+    
+    for ch = 1:length(channelLabels)
+        fieldName = channelLabels{ch};
+        flagCol = [fieldName '_SeizureFlag'];
+        
+        if ~ismember(flagCol, detectionResults.Properties.VariableNames)
+            fprintf('Channel: %s (EMG - no seizure detection)\n\n', fieldName);
+            continue;
+        end
+        
+        numSeizures = sum(detectionResults.(flagCol));
+        totalEpochs = height(detectionResults);
+        percentage = 100 * numSeizures / totalEpochs;
+        
+        fprintf('Channel: %s\n', fieldName);
+        fprintf('  Total epochs: %d\n', totalEpochs);
+        fprintf('  Seizure epochs: %d (%.1f%%)\n', numSeizures, percentage);
+        
+        if numSeizures > 0
+            seizureEpochs = find(detectionResults.(flagCol));
+            fprintf('  Seizure epoch numbers: ');
+            if numSeizures <= 20
+                fprintf('%s\n', mat2str(seizureEpochs'));
+            else
+                fprintf('%s ... (showing first 20)\n', mat2str(seizureEpochs(1:20)'));
+            end
+        end
+        fprintf('\n');
+    end
+    
+    fprintf('===============================================\n\n');
+end
+
+function displayManualReviewSummary(reviewedResults, channelLabels)
+    fprintf('\n========== MANUAL REVIEW SUMMARY BY CHANNEL ==========\n\n');
+    
+    for ch = 1:length(channelLabels)
+        fieldName = channelLabels{ch};
+        reviewCol = [fieldName '_ManualReview'];
+        
+        if ~ismember(reviewCol, reviewedResults.Properties.VariableNames)
+            fprintf('Channel: %s (EMG - no seizure detection)\n\n', fieldName);
+            continue;
+        end
+        
+        numAccepted = sum(reviewedResults.(reviewCol));
+        totalEpochs = height(reviewedResults);
+        percentage = 100 * numAccepted / totalEpochs;
+        
+        fprintf('Channel: %s\n', fieldName);
+        fprintf('  Total epochs: %d\n', totalEpochs);
+        fprintf('  Accepted seizure epochs: %d (%.1f%%)\n', numAccepted, percentage);
+        
+        if numAccepted > 0
+            acceptedEpochs = find(reviewedResults.(reviewCol));
+            fprintf('  Accepted epoch numbers: ');
+            if numAccepted <= 20
+                fprintf('%s\n', mat2str(acceptedEpochs'));
+            else
+                fprintf('%s ... (showing first 20)\n', mat2str(acceptedEpochs(1:20)'));
+            end
+        end
+        fprintf('\n');
+    end
+    
+    fprintf('======================================================\n\n');
+end
+
+function saveReviewedResults(reviewedResults, reviewSummary, filepath)
+    writetable(reviewedResults, filepath, 'Sheet', 'Detection Results');
+    
+    summaryData = {
+        'Total Detected Events', reviewSummary.totalDetected;
+        'Reviewed', reviewSummary.reviewed;
+        'Accepted', reviewSummary.accepted;
+        '  Single Spike', reviewSummary.singleSpike;
+        '  Poly Spike', reviewSummary.polySpike;
+        '  Spike-Wave Discharge', reviewSummary.spikeWave;
+        '  Seizure', reviewSummary.seizure;
+        'Rejected', reviewSummary.rejected;
+        'Not Reviewed', reviewSummary.notReviewed
+    };
+    summaryTable = cell2table(summaryData, 'VariableNames', {'Metric', 'Count'});
+    writetable(summaryTable, filepath, 'Sheet', 'Review Summary');
+    
+    eventTypes = reviewedResults.EventType;
+    uniqueTypes = unique(eventTypes);
+    eventCounts = zeros(length(uniqueTypes), 1);
+    for i = 1:length(uniqueTypes)
+        eventCounts(i) = sum(strcmp(eventTypes, uniqueTypes{i}));
+    end
+    eventTable = table(uniqueTypes, eventCounts, 'VariableNames', {'EventType', 'Count'});
+    writetable(eventTable, filepath, 'Sheet', 'Event Type Summary');
+    
+    fprintf('Results saved to: %s\n', filepath);
+end
+
+function data = addSeizureInfoToData(data, reviewedResults, channelLabels)
+    % Add seizure detection results back to the original data table
+    
+    % Add EventType column
+    data.EventType = reviewedResults.EventType;
+    
+    % Add seizure flags and manual review for each EEG channel
+    for ch = 1:length(channelLabels)
+        fieldName = channelLabels{ch};
+        
+        % Add seizure flag if exists
+        flagCol = [fieldName '_SeizureFlag'];
+        if ismember(flagCol, reviewedResults.Properties.VariableNames)
+            data.(flagCol) = reviewedResults.(flagCol);
+        end
+        
+        % Add manual review if exists
+        reviewCol = [fieldName '_ManualReview'];
+        if ismember(reviewCol, reviewedResults.Properties.VariableNames)
+            data.(reviewCol) = reviewedResults.(reviewCol);
+        end
+    end
+    
+    fprintf('Added seizure detection columns to data table\n');
+end
