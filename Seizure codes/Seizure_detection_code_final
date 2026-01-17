@@ -189,7 +189,7 @@ disp(data(1:10, :));
 %% Run seizure detection on the data timetable
 % Parameters
 fs = 400; % Sampling frequency
-threshold = 7; % Standard deviations above mean
+threshold = 6; % Standard deviations above mean
 
 % Get channel names from data (excluding DateTime and State columns)
 allVars = data.Properties.VariableNames;
@@ -212,7 +212,7 @@ detectionResults.State = data.State;
 % Display summary (will show only EEG channels with detections)
 displayDetectionSummary(detectionResults, channelVars);
 
-% Manual review with classification
+% Manual review with classification - pass threshold value
 [reviewedResults, reviewSummary] = manualReviewSeizures_fromData(epochs, channelVars, detectionResults, fs, threshold);
 
 % Add DateTime and State to reviewed results
@@ -486,9 +486,10 @@ function [reviewedResults, reviewSummary] = manualReviewSeizures_fromData(epochs
             end
             
             if ch == 1 && ~isEMG
-                % Move legend outside the plot area
-                legend({'Signal', 'Mean Env', sprintf('Mean + %.1f SD', thresholdValue)}, ...
-                       'Location', 'northeastoutside', 'FontSize', 10);
+                % Move legend outside the plot area at the top
+                lgd = legend({'Signal', 'Mean Env', sprintf('Mean + %.1f SD', thresholdValue)}, ...
+                       'Orientation', 'horizontal', 'FontSize', 10);
+                lgd.Position(2) = 0.98 - lgd.Position(4); % Position at top of figure
             end
             
             grid on;
