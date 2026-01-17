@@ -1,18 +1,22 @@
 % STEP 1: READ EDF AND CREATE A DATA FILE WITH THE DATE/TIME COLUMN
 % EDF Reader with DateTime Column
 % This script reads EDF file and adds a DateTime column for each 10-sec epoch
-% Every time you run a different mouse you need to change line #9
-% (edf_filename) and line #96 (tsv_filename). When detection is complete
-% make sure to change the output filename
 
 %% 1. Read EDF file and info
-edf_filename = 'Mouse#1_2022-03-01_08_45_12_export.edf'; %UPDATE THIS file name as needed
-edfinfo = edfinfo(edf_filename);
-data = edfread(edf_filename);
+edf_filename = 'Mouse#2_2022-03-01_08_45_23_export.edf';
+info = edfinfo(edf_filename);
 
-%% 2. Extract start date and time from edfinfo
-start_date_str = edfinfo.StartDate; % '03.03.22'
-start_time_str = edfinfo.StartTime; % '09.59.50'
+% Define the specific channels to load
+channels_to_keep = {'EEG EEG1A-B', 'EEG EEG2A-B', 'EMG EMG'};
+
+% Read only the specified channels
+data = edfread(edf_filename, 'SelectedSignals', channels_to_keep);
+
+fprintf('Loaded %d channels: %s\n', length(channels_to_keep), strjoin(channels_to_keep, ', '));
+
+%% 2. Extract start date and time from info
+start_date_str = info.StartDate; % '03.03.22'
+start_time_str = info.StartTime; % '09.59.50'
 
 % Display the raw strings for debugging
 fprintf('Raw start date: %s\n', start_date_str);
@@ -49,36 +53,8 @@ epoch_times = start_datetime + seconds((0:num_epochs-1)' * epoch_duration);
 %% 4. Add DateTime column to the data timetable
 data.DateTime = epoch_times;
 
-%% 5. Remove unwanted columns
-% List of column names to remove
-columns_to_remove = {
-    'SignalLabel4_EEG1_FuA_B'
-    'SignalLabel4_EEG2_FuA_B'
-    'SignalLabel5_EEG1_FuA_B'
-    'SignalLabel6_EEG1_AlA_B'
-    'SignalLabel7_EEG1_BeA_B'
-    'SignalLabel8_EEG1_GaA_B'
-    'SignalLabel9_EEG1_DeA_B'
-    'SignalLabel10_EEG1_ThA_B'
-    'SignalLabel11_EEG2_FuA_B'
-    'SignalLabel12_EEG2_AlA_B'
-    'SignalLabel13_EEG2_BeA_B'
-    'SignalLabel14_EEG2_GaA_B'
-    'SignalLabel15_EEG2_DeA_B'
-    'SignalLabel16_EEG2_ThA_B'
-    'SignalLabel17_EMG_Ful'
-    'SignalLabel18_EMG_10_'
-    'SignalLabel19_EMG_50_'
-    'SignalLabel20_EMG_100'
-    'SignalLabel21_EMG_150'
-    'SignalLabel22_EMG_50_'
-};
-
-% Remove columns that exist in the data
-existing_columns = columns_to_remove(ismember(columns_to_remove, data.Properties.VariableNames));
-data = removevars(data, existing_columns);
-
-fprintf('Removed %d columns\n', length(existing_columns));
+%% 5. Data now contains only the 3 selected channels
+fprintf('Data contains only the selected channels\n');
 
 %% 6. Display results
 fprintf('Data loaded successfully!\n');
@@ -90,10 +66,8 @@ fprintf('Remaining columns: %d\n', width(data));
 fprintf('\nFirst few rows of data:\n');
 disp(data(1:5, :));
 
-%%
-%STEP 2: ADD STATE DATA TO THE EDF DATA FILE
 %% 7. Read TSV file with vigilance states
-tsv_filename = 'Mouse#1_2022-03-01_08_45_12_scores.tsv'; % UPDATE THIS with your actual TSV filename
+tsv_filename = 'Mouse#2_2022-03-01_08_45_23_scores.tsv'; % UPDATE THIS with your actual TSV filename
 
 % Read TSV file, skipping first 10 rows of metadata
 tsv_data = readtable(tsv_filename, 'FileType', 'text', 'Delimiter', '\t', ...
@@ -215,7 +189,7 @@ disp(data(1:10, :));
 %% Run seizure detection on the data timetable
 % Parameters
 fs = 400; % Sampling frequency
-threshold = 6; % Standard deviations above mean
+threshold = 7; % Standard deviations above mean
 
 % Get channel names from data (excluding DateTime and State columns)
 allVars = data.Properties.VariableNames;
@@ -473,39 +447,48 @@ function [reviewedResults, reviewSummary] = manualReviewSeizures_fromData(epochs
             hold on;
             
             if ~isEMG
+                % For EEG channels: plot mean envelope and threshold lines (positive and negative)
                 plot([0 10], [meanEnv meanEnv], 'g--', 'LineWidth', 2);
                 plot([0 10], [thresholdLine thresholdLine], 'm--', 'LineWidth', 2);
+                plot([0 10], [-meanEnv -meanEnv], 'g--', 'LineWidth', 2);
+                plot([0 10], [-thresholdLine -thresholdLine], 'm--', 'LineWidth', 2);
             end
             
             xlabel('Time (s)', 'FontSize', 11);
             ylabel('Amplitude (\muV)', 'FontSize', 11);
             
-            % Get title information
+            % Get title information including state
             flagCol = [fieldName '_SeizureFlag'];
+            stateStr = '';
+            if ismember('State', detectionResults.Properties.VariableNames)
+                stateStr = sprintf(' | State: %s', detectionResults.State{epochNum});
+            end
+            
             if ismember(flagCol, detectionResults.Properties.VariableNames)
                 zScoreCol = [fieldName '_PeakZScore'];
                 if ismember(zScoreCol, detectionResults.Properties.VariableNames)
                     zScore = detectionResults.(zScoreCol)(epochNum);
-                    titleStr = sprintf('%s - Epoch %d (%.1f-%.1f s) - Z-score: %.2f', ...
+                    titleStr = sprintf('%s - Epoch %d (%.1f-%.1f s) - Z-score: %.2f%s', ...
                         fieldName, detectionResults.EpochNum(epochNum), ...
                         detectionResults.StartTime_s(epochNum), ...
-                        detectionResults.StartTime_s(epochNum)+10, zScore);
+                        detectionResults.StartTime_s(epochNum)+10, zScore, stateStr);
                 else
-                    titleStr = sprintf('%s - Epoch %d (%.1f-%.1f s)', ...
+                    titleStr = sprintf('%s - Epoch %d (%.1f-%.1f s)%s', ...
                         fieldName, detectionResults.EpochNum(epochNum), ...
                         detectionResults.StartTime_s(epochNum), ...
-                        detectionResults.StartTime_s(epochNum)+10);
+                        detectionResults.StartTime_s(epochNum)+10, stateStr);
                 end
                 title(titleStr, 'FontSize', 12, 'FontWeight', 'bold', 'Color', 'r');
             else
-                titleStr = sprintf('%s - Epoch %d - EMG', ...
-                    fieldName, detectionResults.EpochNum(epochNum));
+                titleStr = sprintf('%s - Epoch %d - EMG%s', ...
+                    fieldName, detectionResults.EpochNum(epochNum), stateStr);
                 title(titleStr, 'FontSize', 12, 'FontWeight', 'bold');
             end
             
             if ch == 1 && ~isEMG
+                % Move legend outside the plot area
                 legend({'Signal', 'Mean Env', sprintf('Mean + %.1f SD', thresholdValue)}, ...
-                       'Location', 'northwest', 'FontSize', 10);
+                       'Location', 'northeastoutside', 'FontSize', 10);
             end
             
             grid on;
