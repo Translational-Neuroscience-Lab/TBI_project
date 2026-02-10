@@ -205,12 +205,14 @@ for ch = 1:length(channels)
 
         % Only create plot if we have data
         if ~isempty(legend_handles)
-            xlabel('Temporal Scale', 'FontSize', 24);
-            ylabel('Sample Entropy', 'FontSize', 24);
-            title(sprintf('%s %s', stage, channel_name), 'FontSize', 32);
-            legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 16);
+            xlabel('Temporal Scale', 'FontSize', 34);
+            ylabel('Sample Entropy', 'FontSize', 34);
+            title(sprintf('%s %s', stage, channel_name), 'FontSize', 38);
+            if stage == "REM"
+             legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 30);
+            end
             grid on;
-            set(gca, 'FontSize', 20);
+            set(gca, 'FontSize', 28);
 
             % Save plot
             plot_filename_png = fullfile(plot_dir, sprintf('%s_ch%d_average.png', stage, channel));
