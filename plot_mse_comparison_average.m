@@ -207,7 +207,7 @@ for ch = 1:length(channels)
         if ~isempty(legend_handles)
             xlabel('Temporal Scale', 'FontSize', 34);
             ylabel('Sample Entropy', 'FontSize', 34);
-            title(sprintf('%s %s', stage, channel_name), 'FontSize', 38);
+            title(sprintf('%s %s', stage, %channel_name), 'FontSize', 38);
             if stage == "REM"
              legend(legend_handles, legend_entries, 'Location', 'best', 'FontSize', 30);
             end
