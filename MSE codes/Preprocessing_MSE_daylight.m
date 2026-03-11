@@ -1,4 +1,4 @@
-function preprocessing_with_mse_daylight(edf_path, tsv_path, output_base)
+function preprocessing_MSE_daylight(edf_path, tsv_path, output_base)
     % ======= CONFIGURATION =======
     fs = 400;
     [b, a] = butter(2, [0.5 50] / (fs / 2), 'bandpass');
