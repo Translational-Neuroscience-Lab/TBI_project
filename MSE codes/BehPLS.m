@@ -2,8 +2,8 @@ function mse_pls_behavioural(base_path_older, neuropath_path)
 % Behavioural PLS analysis for MSE data correlated with neuropathology
 % All mice treated as one group (ncond=1)
 % Behaviour matrix: 18 variables
-%   - Iba1 IHC (3): TCTX, DHPC, ENT
-%   - Western Blot (3): DA9/Actin, 6E10/Actin, PHF1/Actin
+%   - Iba1 IHC (3): TCTX (cortex), DHPC (dorsal hippocampus), ENT (enthorinal cortex)
+%   - Western Blot (3): DA9/Actin, 6E10/Actin, PHF1/Actin.
 %   - Abeta ELISA (4): Soluble Abeta42, Insoluble Abeta42, Soluble Abeta40, Insoluble Abeta40
 %   - Abeta IHC (3): TCTX, DHPC, ENT
 %   - ThioS (3): TCTX, DHPC, ENT
@@ -22,7 +22,7 @@ older_sessions = {'Session1', 'Session2', 'Session4', 'Session5', 'Session6', 'S
 conditions     = {'Trazodone', 'Control'};
 stages         = ["Wake", "NREM", "REM"];
 lighting_conditions = ["Lights_On", "Lights_Off"];
-channels       = [2];
+channels       = [1, 2];
 
 % Behaviour variable names (18 total) — used for axis labels
 behav_column_names = {...
