@@ -9,7 +9,7 @@ function mse_pls_lights_sex(base_path_Adult)
 addpath(genpath('PLS'));
 
 % Parameters
-Adult_sessions = {'Session1'};
+sessions = {'Session1'};
 conditions = {'TBI', 'Sham'};
 stages = ["Wake", "NREM", "REM"];
 lighting_conditions = ["Lights_On", "Lights_Off"];
