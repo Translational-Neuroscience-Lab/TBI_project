@@ -1,4 +1,4 @@
-function mse_pls_single_cohort_sex(base_path_Adult)
+function mse_pls_lights_sex(base_path_Adult)
 % 6m subacute ("adult") cohort PLS analysis for MSE data
 % Tests whether Sham vs TBI differences in the Adult cohort
 % Runs only Channel 2 and plots both LV1 and LV2
