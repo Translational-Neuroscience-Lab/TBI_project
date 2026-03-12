@@ -11,4 +11,4 @@ module load matlab/2023b.2
 mkdir -p logs
 
 
-matlab -nosplash -nodesktop -r "addpath('/home/vcarriqu/scratch/MSE'); base_path_Adult = '/home/vcarriqu/scratch/MSE'; mse_pls_lights_sex(base_path_Adult); exit;"
+matlab -nosplash -nodesktop -r "addpath('/home/vcarriqu/scratch/MSE'); base_path_Adult = '/home/vcarriqu/scratch/MSE/dataset/MSE_NLF_6m_subacute'; mse_pls_lights_sex(base_path_Adult); exit;"
