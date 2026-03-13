@@ -1,7 +1,7 @@
 function mse_pls_lights_sex(base_path_Adult)
 % 6m subacute ("adult") cohort PLS analysis for MSE data
 % Tests whether Sham vs TBI differences in the Adult cohort
-% Runs only Channel 2 and plots both LV1 and LV2
+% Runs both channels 1 and 2 and plots both LV1 and LV2
 % Also runs sex-split PLS with 4 groups:
 %   Sham Male, Sham Female, TBI Male, TBI Female
 
@@ -13,7 +13,7 @@ sessions = {'Session1'};
 conditions = {'TBI', 'Sham'};
 stages = ["Wake", "NREM", "REM"];
 lighting_conditions = ["Lights_On", "Lights_Off"];
-channels = [2];
+channels = [1, 2];
 
 % Define cohorts
 cohorts = {'Adult'};
