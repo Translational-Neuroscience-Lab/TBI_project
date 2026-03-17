@@ -91,7 +91,7 @@ for ch = 1:length(channels)
             % Combine data across all sessions in this cohort
             for s = 1:length(session_list)
                 session = session_list{s};
-                condition_path = fullfile(base_path, session, condition, 'Results');
+                condition_path = fullfile(base_path, condition, 'Results');
 
                 if exist(condition_path, 'dir')
                     dataset_files = dir(fullfile(condition_path, '*_dataset.mat'));
@@ -144,7 +144,7 @@ for ch = 1:length(channels)
                                             n_epochs  = sum(combo_idx);
 
                                             combined_mouse_data.mouse_averages = [combined_mouse_data.mouse_averages; mouse_avg];
-                                            combined_mouse_data.mouse_ids{end+1} = sprintf('%s_%s_%s_%s', mouse_id, session, stage, lighting);
+                                            combined_mouse_data.mouse_ids{end+1} = sprintf('%s_%s_%s_%s', mouse_id, stage, lighting);
                                             combined_mouse_data.stages   = [combined_mouse_data.stages; stage];
                                             combined_mouse_data.lighting = [combined_mouse_data.lighting; lighting];
                                             combined_mouse_data.n_epochs_per_mouse = [combined_mouse_data.n_epochs_per_mouse; n_epochs];
@@ -188,7 +188,7 @@ for ch = 1:length(channels)
 
             for s = 1:length(session_list)
                 session = session_list{s};
-                condition_path = fullfile(base_path, session, condition, 'Results');
+                condition_path = fullfile(base_path, condition, 'Results');
 
                 if exist(condition_path, 'dir')
                     dataset_files = dir(fullfile(condition_path, '*_dataset.mat'));
@@ -251,7 +251,7 @@ for ch = 1:length(channels)
                                             all_data_sex.(cohort).(group_key).(field_name).mouse_averages = ...
                                                 [all_data_sex.(cohort).(group_key).(field_name).mouse_averages; mouse_avg];
                                             all_data_sex.(cohort).(group_key).(field_name).mouse_ids{end+1} = ...
-                                                sprintf('%s_%s_%s_%s', mouse_id, session, stage, lighting);
+                                                sprintf('%s_%s_%s_%s', mouse_id, stage, lighting);
                                             all_data_sex.(cohort).(group_key).(field_name).stages = ...
                                                 [all_data_sex.(cohort).(group_key).(field_name).stages; stage];
                                             all_data_sex.(cohort).(group_key).(field_name).lighting = ...
