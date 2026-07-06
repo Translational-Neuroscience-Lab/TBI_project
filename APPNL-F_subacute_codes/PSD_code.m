@@ -58,7 +58,7 @@ end
 %vigilant state, light period, aggregates, normalizes and creates power spectra file
 
 % Set the directory containing your data files
-base_dir = 'S:\LAB_Kent\Studies\TBI\Scored_Data\NLF_6m_subacute\NLF_6m_tsv-edf_files\Processed_EDF';
+base_dir = 'S:\LAB_Kent\Studies\TBI\Scored_Data\NLF_6m_subacute\NLF_6m_subacute_tsv-edf_files\Processed_EDF';
 data_dirs = {fullfile(base_dir, 'TBI'), fullfile(base_dir, 'Sham')};
 
 fprintf('Starting PSD data processing...\n');
