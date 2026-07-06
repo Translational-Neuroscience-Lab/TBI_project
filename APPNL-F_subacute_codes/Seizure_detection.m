@@ -3,7 +3,7 @@
 % This script reads EDF file and adds a DateTime column for each 10-sec epoch
 
 %% 1. Read EDF file and info
-edf_filename = 'Mouse#20_2022-04-03_09_33_29_export.edf';
+edf_filename = 'Mouse#20_2022-04-03_09_33_29_export.edf';      %change this for each mouse
 info = edfinfo(edf_filename);
 
 % Define the specific channels to load
