@@ -329,6 +329,10 @@ function aggregated_data = process_all_psd_files(data_dirs)
     % Define treatment groups
     TBI_animals = {'Mouse#3','Mouse#4','Mouse#7','Mouse#6', 'Mouse#12','Mouse#13','Mouse#14','Mouse#15','Mouse#16','Mouse#17'};
     Sham_animals = {'Mouse#1','Mouse#2','Mouse#5','Mouse#10','Mouse#11','Mouse#18','Mouse#19','Mouse#20'};
+
+    %Define sex groups
+    Male_animas = {'Mouse#3','Mouse#4','Mouse#5','Mouse#12', 'Mouse#13', 'Mouse#16', 'Mouse#17', 'Mouse#18', 'Mouse#19', 'Mouse#20'};
+    Female_animals = {'Mouse#1','Mouse#2','Mouse#6', 'Mouse#7', 'Mouse#10', 'Mouse#11', 'Mouse#14', 'Mouse#15'};
     
     % Allow single directory string to be passed as well
     if ischar(data_dirs) || isstring(data_dirs)
@@ -350,7 +354,7 @@ function aggregated_data = process_all_psd_files(data_dirs)
                 fprintf('Processing file %d/%d: %s\n', file_idx, length(psd_files), psd_filename);
 
                 % Pass the specific directory for this file
-                file_data = process_single_file(current_dir, psd_filename, TBI_animals, Sham_animals);
+                file_data = process_single_file(current_dir, psd_filename, TBI_animals, Sham_animals, Male_animals, Female_animals);
 
                 if ~isempty(file_data)
                     aggregated_data = [aggregated_data; file_data];
@@ -364,7 +368,7 @@ function aggregated_data = process_all_psd_files(data_dirs)
     end
 end
 %%
-function file_aggregated_data = process_single_file(data_dir, psd_filename, TBI_animals, Sham_animals)
+function file_aggregated_data = process_single_file(data_dir, psd_filename, TBI_animals, Sham_animals, Male_animals, Female_animals)
     psd_filepath = fullfile(data_dir, psd_filename);
     
     % Generate corresponding scores filename
@@ -391,13 +395,15 @@ function file_aggregated_data = process_single_file(data_dir, psd_filename, TBI_
     % Extract mouse ID and assign treatment
     mouse_id = extract_mouse_id(psd_filename);
     treatment = assign_treatment(mouse_id, TBI_animals, Sham_animals);
+    sex = assign_sex(mouse_id, Male_animals, Female_animals);
     
     % Add mouse ID and treatment columns
     psd_table.mouse_id = repmat({mouse_id}, height(psd_table), 1);
     psd_table.treatment = repmat(treatment, height(psd_table), 1);
+    psd_table.sex = repmat(sex, height(psd_table), 1);
     
     % Aggregate power spectral data
-    file_aggregated_data = aggregate_power_spectra(psd_table, mouse_id, treatment);
+    file_aggregated_data = aggregate_power_spectra(psd_table, mouse_id, treatment, sex);
     
     fprintf('  Mouse ID: %s, Treatment: %s\n', mouse_id, treatment);
     fprintf('  Successfully processed: %d PSD records\n\n', height(psd_table));
@@ -537,7 +543,19 @@ function treatment = assign_treatment(mouse_id, TBI_animals, Sham_animals)
 end
 
 %%
-function aggregated_data = aggregate_power_spectra(psd_table, mouse_id, treatment)
+function sex = assign_sex(mouse_id, Male_animals, Female_animals)
+    if ismember(mouse_id, Male_animals)
+        sex = "Male";
+    elseif ismember(mouse_id, Female_animals)
+        sex = "Female";
+    else
+        sex = "Unknown";
+        fprintf(' WARNING: Mouse ID "%s" not found in sex groups\n', mouse_id);
+    end
+end
+
+%%
+function aggregated_data = aggregate_power_spectra(psd_table, mouse_id, treatment, sex)
     % Find frequency columns (0-30 Hz)
     [freq_cols, freq_values] = find_frequency_columns(psd_table);
     
@@ -574,7 +592,7 @@ function aggregated_data = aggregate_power_spectra(psd_table, mouse_id, treatmen
         % Process EEG1 data
         if ~isempty(eeg1_cols)
             agg_record = create_aggregated_record(psd_table, state_mask, eeg1_cols, eeg1_freqs, ...
-                mouse_id, treatment, current_state, current_phase, 'EEG1');
+                mouse_id, treatment, sex, current_state, current_phase, 'EEG1');
             aggregated_data = [aggregated_data; agg_record];
         end
         
@@ -657,7 +675,7 @@ end
 
 %%
 function agg_record = create_aggregated_record(psd_table, state_mask, eeg_cols, eeg_freqs, ...
-    mouse_id, treatment, current_state, current_phase, eeg_channel)
+    mouse_id, treatment, sex, current_state, current_phase, eeg_channel)
     
     eeg_data = psd_table(state_mask, eeg_cols);
     if height(eeg_data) > 0
@@ -668,6 +686,7 @@ function agg_record = create_aggregated_record(psd_table, state_mask, eeg_cols, 
         agg_record = table();
         agg_record.Mouse_ID = {mouse_id};
         agg_record.Treatment = treatment;
+        agg_record.Sex = sex;
         agg_record.Sleep_State = {current_state};
         agg_record.Lights_Phase = {current_phase};
         agg_record.EEG_Channel = {eeg_channel};
