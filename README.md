@@ -25,7 +25,8 @@ You will need Matlab to run all the codes. We used version R2023a but should be 
 ### PSD and Seizure codes
 
 For the PSD and seizure codes you will need two files for each mouse/subject: the EDF file with all the raw EEG data and the TSV files with the sleep scoring of each epoch. 
-*NOTE: we used the Sirenia Sleep software to acquire the EEG data and to score sleep, therefore, our files came from that software. If using another acquisition/scoring software you will still need to convert your data to EDF/TSV files to be compatible with this codes.
+
+**NOTE**: we used the Sirenia Sleep software to acquire the EEG data and to score sleep, therefore, our files came from that software. If using another acquisition/scoring software you will still need to convert your data to EDF/TSV files to be compatible with this codes.
 
 ### MSE
 
@@ -42,6 +43,7 @@ The data for the PLS analysis and plotting was obtained from our previous PSD pr
 <img width="738" height="41" alt="image" src="https://github.com/user-attachments/assets/304b61c5-a918-4949-af87-0e44051f231c" />
 
 This requires some manual manipulation of the data before it can be used in the PLS code. The data was separated by vigilance state (NREM, REM, Wake) and by light period (on/off).
-*NOTE: the "Sex PLS" that considers both treatment and sex, is constructed so that your data should be organized as such: sham females, sham males, TBI females, TBI males. If altering the ordering of the data you will also need to alter the code.
+
+**NOTE**: the "Sex PLS" that considers both treatment and sex, is constructed so that your data should be organized as such: sham females, sham males, TBI females, TBI males. If altering the ordering of the data you will also need to alter the code.
 
 More details on how to use each code will be available soon under the "README files" folder.
