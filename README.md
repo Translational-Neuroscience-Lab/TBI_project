@@ -44,3 +44,4 @@ The data for the PLS analysis and plotting was obtained from our previous PSD pr
 This requires some manual manipulation of the data before it can be used in the PLS code. The data was separated by vigilance state (NREM, REM, Wake) and by light period (on/off).
 *NOTE: the "Sex PLS" that considers both treatment and sex, is constructed so that your data should be organized as such: sham females, sham males, TBI females, TBI males. If altering the ordering of the data you will also need to alter the code.
 
+More details on how to use each code will be available soon under the "README files" folder.
